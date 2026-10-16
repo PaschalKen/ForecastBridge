@@ -27,7 +27,7 @@ and serve it through an API.
 ```
 app/
   config.py    # settings, read from environment variables / .env
-  weather.py   # fetch_forecast() calls Open-Meteo; tidy_forecast() reshapes the data
+  weather.py   # fetch_forecast() calls Open-Meteo; format_forecast() reshapes the data
   main.py      # FastAPI app (Stage 3)
 tests/
   test_weather.py
