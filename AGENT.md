@@ -31,7 +31,9 @@ app/
   weather.py   # fetch_forecast() calls Open-Meteo; format_forecast() reshapes the data
   main.py      # FastAPI app (Stage 3)
 tests/
-  test_weather.py
+  test_weather.py   # format_forecast and fetch_forecast (requests.get is faked)
+  test_main.py      # API routes via TestClient (fetch_forecast is faked)
+pytest.ini          # pytest settings
 requirements.txt  # Python packages: direct dependencies only, pinned
 REQUIREMENTS.md   # feature requirements and their status
 .env.example      # template for .env (the real .env is not committed)
@@ -52,8 +54,8 @@ pytest                           # run tests
 - [x] Stage 0: Workspace, virtual environment, Git
 - [x] Stage 1: Fetch a forecast from Open-Meteo
 - [x] Stage 2: Tidy hourly data into one record per hour
-- [ ] Stage 3: FastAPI app with `GET /health` and `GET /forecast?location=...` (404 for unknown locations)
-- [ ] Stage 4: pytest tests that do not call the live weather service
+- [ ] Stage 3: FastAPI app with `GET /health` and `GET /forecast?location=...` (404 done; 502 on provider failure still to do)
+- [x] Stage 4: pytest tests that do not call the live weather service
 - [ ] AWS 1: Account, billing alarm, IAM user (no root usage)
 - [ ] AWS 2: Save forecast snapshots to S3
 - [ ] AWS 3: Deploy the API to Lambda and API Gateway

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from app.locations import LOCATIONS
 from app.weather import fetch_forecast, format_forecast
@@ -15,6 +15,14 @@ def health_check():
 
 @app.get("/forecast")
 def get_forecast(location: str):
+    location = location.lower()
+
+    if location not in LOCATIONS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Location '{location}' not found.",
+        )
+    
     latitude, longitude = LOCATIONS[location]
     data = fetch_forecast(latitude, longitude)
     return format_forecast(data)

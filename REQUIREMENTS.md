@@ -22,7 +22,7 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 |---|-------------|--------|
 | 2.1 | `GET /health` returns `{"status": "ok"}` | ✅ |
 | 2.2 | `GET /forecast?location=<name>` returns the tidied hourly records | ✅ |
-| 2.3 | Unknown locations return a 404 with a helpful message | ⬜ |
+| 2.3 | Unknown locations return a 404 with a helpful message | ✅ |
 | 2.4 | If the weather provider fails, return a 502 error rather than crashing | ⬜ |
 | 2.5 | Interactive API documentation at `/docs` | ✅ |
 
@@ -30,8 +30,8 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| 3.1 | Automated tests with pytest | ⬜ |
-| 3.2 | Tests never call the live weather service | ⬜ |
+| 3.1 | Automated tests with pytest | ✅ |
+| 3.2 | Tests never call the live weather service | ✅ |
 | 3.3 | Settings (URLs, bucket names, etc.) come from environment variables, not hard-coded | ✅ |
 | 3.4 | No secrets or credentials committed to Git | ✅ |
 
