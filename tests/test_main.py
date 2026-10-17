@@ -1,3 +1,5 @@
+import requests
+
 from fastapi.testclient import TestClient
 
 from app import main
@@ -48,3 +50,13 @@ def test_forecast_without_location_returns_422():
     response = client.get("/forecast")
 
     assert response.status_code == 422
+
+def test_forecast_when_fetch_fails_returns_503(monkeypatch):
+    def broken_fetch(latitude, longitude):
+        raise requests.RequestException("Provider down")
+    
+    monkeypatch.setattr(main, "fetch_forecast", broken_fetch)
+
+    response = client.get("/forecast", params={"location": "portsmouth"})
+
+    assert response.status_code == 503

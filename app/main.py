@@ -1,3 +1,5 @@
+import requests
+
 from fastapi import FastAPI, HTTPException
 
 from app.locations import LOCATIONS
@@ -24,5 +26,13 @@ def get_forecast(location: str):
         )
     
     latitude, longitude = LOCATIONS[location]
-    data = fetch_forecast(latitude, longitude)
+
+    try:
+        data = fetch_forecast(latitude, longitude)
+    except requests.RequestException:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Weather provider is unavailable. Try again later.",
+        )
+    
     return format_forecast(data)
