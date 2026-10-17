@@ -12,18 +12,19 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 | 1.1 | Fetch hourly forecasts from Open-Meteo for a given latitude and longitude | ✅ |
 | 1.2 | Return temperature (°C), chance of rain (%) and wind speed (km/h) for each hour | ✅ |
 | 1.3 | Tidy the provider's data into one record per hour | ✅ |
-| 1.4 | Support a fixed list of UK locations by name (Portsmouth, London, Manchester, Edinburgh) | ⬜ |
+| 1.4 | Support a fixed list of UK locations by name (Portsmouth, London, Manchester, Edinburgh) | ✅ |
 | 1.5 | Fail clearly, not silently, when the weather provider is down or slow (timeout) | ✅ |
+| 1.6 | Look up any place by name using Open-Meteo's geocoding API, instead of only the fixed list | ⬜ |
 
 ## 2. API
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| 2.1 | `GET /health` returns `{"status": "ok"}` | ⬜ |
-| 2.2 | `GET /forecast?location=<name>` returns the tidied hourly records | ⬜ |
+| 2.1 | `GET /health` returns `{"status": "ok"}` | ✅ |
+| 2.2 | `GET /forecast?location=<name>` returns the tidied hourly records | ✅ |
 | 2.3 | Unknown locations return a 404 with a helpful message | ⬜ |
 | 2.4 | If the weather provider fails, return a 502 error rather than crashing | ⬜ |
-| 2.5 | Interactive API documentation at `/docs` | ⬜ |
+| 2.5 | Interactive API documentation at `/docs` | ✅ |
 
 ## 3. Quality
 
@@ -50,4 +51,3 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 
 - User accounts or logins
 - A website front end
-- Locations outside the fixed list

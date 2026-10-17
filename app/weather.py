@@ -11,7 +11,7 @@ def fetch_forecast(latitude: float, longitude: float) -> dict:
         "timezone": "Europe/London"
     }
 
-    response = requests.get(OPEN_METEO_URL,params=params, timeout=10)
+    response = requests.get(OPEN_METEO_URL, params=params, timeout=10)
     response.raise_for_status()  # Raise an error for bad responses
     return response.json()
 

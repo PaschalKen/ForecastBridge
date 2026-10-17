@@ -27,6 +27,7 @@ and serve it through an API.
 ```
 app/
   config.py    # settings, read from environment variables / .env
+  locations.py # LOCATIONS: supported place names -> (latitude, longitude)
   weather.py   # fetch_forecast() calls Open-Meteo; format_forecast() reshapes the data
   main.py      # FastAPI app (Stage 3)
 tests/
