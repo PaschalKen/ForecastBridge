@@ -56,7 +56,7 @@ pytest                           # run tests
 - [x] Stage 2: Tidy hourly data into one record per hour
 - [ ] Stage 3: FastAPI app with `GET /health` and `GET /forecast?location=...` (404 done; 502 on provider failure still to do)
 - [x] Stage 4: pytest tests that do not call the live weather service
-- [ ] AWS 1: Account, billing alarm, IAM user (no root usage)
+- [x] AWS 1: Account (Free plan, eu-west-2), billing alarm, IAM user `paschal-admin` used via CLI profile `forecastbridge`
 - [ ] AWS 2: Save forecast snapshots to S3
 - [ ] AWS 3: Deploy the API to Lambda and API Gateway
 - [ ] AWS 4: DynamoDB for fast lookups

@@ -39,7 +39,7 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| 4.1 | AWS account with billing alarm and a non-root IAM user | ⬜ |
+| 4.1 | AWS account with billing alarm and a non-root IAM user | ✅ |
 | 4.2 | Save raw forecast snapshots to S3, organised by location and date | ⬜ |
 | 4.3 | Run the API on Lambda behind API Gateway, reachable over HTTPS | ⬜ |
 | 4.4 | Store tidied forecasts in DynamoDB for fast lookups | ⬜ |
