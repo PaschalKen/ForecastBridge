@@ -30,9 +30,11 @@ app/
   locations.py # LOCATIONS: supported place names -> (latitude, longitude)
   weather.py   # fetch_forecast() calls Open-Meteo; format_forecast() reshapes the data
   main.py      # FastAPI app (Stage 3)
+  storage.py   # build_key() and save_snapshot_to_s3(): raw snapshots to S3
 tests/
   test_weather.py   # format_forecast and fetch_forecast (requests.get is faked)
   test_main.py      # API routes via TestClient (fetch_forecast is faked)
+  test_storage.py   # S3 snapshot saving, using moto's fake S3
 pytest.ini          # pytest settings
 requirements.txt  # Python packages: direct dependencies only, pinned
 REQUIREMENTS.md   # feature requirements and their status
