@@ -7,6 +7,9 @@ requests==2.34.2
 # Loading settings from a .env file
 python-dotenv==1.2.4
 
+# AWS
+boto3==1.43.114
+
 # The API (Stage 3)
 fastapi==0.143.2
 uvicorn==0.54.0
@@ -14,3 +17,4 @@ uvicorn==0.54.0
 # Testing (Stage 4); httpx2 is needed by FastAPI's TestClient
 pytest==9.1.1
 httpx2==2.13.1
+moto==5.2.4  # fake AWS services for tests
