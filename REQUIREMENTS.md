@@ -23,7 +23,7 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 | 2.1 | `GET /health` returns `{"status": "ok"}` | ✅ |
 | 2.2 | `GET /forecast?location=<name>` returns the tidied hourly records | ✅ |
 | 2.3 | Unknown locations return a 404 with a helpful message | ✅ |
-| 2.4 | If the weather provider fails, return a 502 error rather than crashing | ⬜ |
+| 2.4 | If the weather provider fails, return a 503 error rather than crashing | ✅ |
 | 2.5 | Interactive API documentation at `/docs` | ✅ |
 
 ## 3. Quality
@@ -52,10 +52,10 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 | # | Requirement | Status |
 |---|-------------|--------|
 | 5.1 | Web page served by the API at `/` (no separate server, no build step) | ✅ |
-| 5.2 | Location dropdown filled from `GET /locations` | ⬜ |
-| 5.3 | "Right now" cards: temperature, chance of rain, wind | ⬜ |
-| 5.4 | 48-hour chart: temperature line, rain chance bars | ⬜ |
-| 5.5 | Clear loading and error messages (unknown location, provider down) | ⬜ |
+| 5.2 | Location dropdown filled from `GET /locations` | ✅ |
+| 5.3 | "Right now" cards: temperature, chance of rain, wind | ✅ |
+| 5.4 | 48-hour chart: temperature line, rain chance bars | ✅ |
+| 5.5 | Clear loading and error messages (unknown location, provider down) | ✅ |
 
 ## Out of scope (for now)
 

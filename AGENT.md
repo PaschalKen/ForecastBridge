@@ -64,13 +64,18 @@ pytest                           # run tests
 - [x] Stage 0: Workspace, virtual environment, Git
 - [x] Stage 1: Fetch a forecast from Open-Meteo
 - [x] Stage 2: Tidy hourly data into one record per hour
-- [ ] Stage 3: FastAPI app with `GET /health` and `GET /forecast?location=...` (404 done; 502 on provider failure still to do)
+- [x] Stage 3: FastAPI app with `/health`, `/locations`, `/forecast` (404 unknown location, 503 provider down)
 - [x] Stage 4: pytest tests that do not call the live weather service
+- [x] Stage 5: Front end served by FastAPI (dropdown, now cards, 48-hour chart, Show now button)
 - [x] AWS 1: Account (Free plan, eu-west-2), billing alarm, IAM user `paschal-admin` used via CLI profile `forecastbridge`
-- [ ] AWS 2: Save forecast snapshots to S3
-- [ ] AWS 3: Deploy the API to Lambda and API Gateway
-- [ ] AWS 4: DynamoDB for fast lookups
-- [ ] AWS 5: Logging, alarms, caching, automation
+- [x] AWS 2: Save forecast snapshots to S3; API caches per location per hour
+- [ ] AWS 3: Collector on Lambda, run hourly by EventBridge Scheduler (next)
+- [ ] AWS 4: API and front end on Lambda (Mangum + Function URL)
+- [ ] AWS 5: CloudWatch logs and alarms; optionally DynamoDB
+
+AWS account note: on this Free plan account, an organization rule (SCP) blocks creating
+resources (e.g. buckets) from the CLI. Create infrastructure in the AWS console; code can then
+read and write data in it.
 
 ## Conventions
 
