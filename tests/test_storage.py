@@ -1,37 +1,59 @@
-import json
 from datetime import datetime, timezone
 
 import boto3
+import pytest
 from moto import mock_aws
 
-from app import storage
+from app.storage import SnapshotStore
 from tests.test_weather import SAMPLE_DATA
 
-
-def test_build_key_uses_location_date_and_time():
-    fixed_time = datetime(2026, 10, 17, 14, 30, 5, tzinfo=timezone.utc)
-
-    key = storage.build_key("portsmouth", fixed_time)
-
-    assert key == "raw/portsmouth/2026-10-17/14-30-05.json"
+TWO_THIRTY_PM = datetime(2026, 10, 17, 14, 30, 5, tzinfo=timezone.utc)
 
 
-def test_save_snapshot_uploads_json_to_s3(monkeypatch):
-    # Fake credentials, so this test can never touch real AWS
+@pytest.fixture
+def s3(monkeypatch):
+    """A fake, in-memory S3 with a bucket called test-bucket."""
+    # Fake credentials, so these tests can never touch real AWS
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
 
-    # storage.py read S3_BUCKET when it was imported, so replace it there
-    monkeypatch.setattr(storage, "S3_BUCKET", "test-bucket")
-
-    # Everything inside this block talks to moto's in-memory S3
     with mock_aws():
-        s3 = boto3.client("s3")
-        s3.create_bucket(Bucket="test-bucket")
+        client = boto3.client("s3")
+        client.create_bucket(Bucket="test-bucket")
+        yield client
 
-        key = storage.save_snapshot_to_s3("portsmouth", SAMPLE_DATA)
 
-        body = s3.get_object(Bucket="test-bucket", Key=key)["Body"].read()
-        assert json.loads(body) == SAMPLE_DATA
-        assert key.startswith("raw/portsmouth/")
+def test_make_key_rounds_to_the_hour():
+    key = SnapshotStore.make_key("portsmouth", TWO_THIRTY_PM)
+
+    assert key == "raw/portsmouth/2026-10-17/14.json"
+
+
+def test_save_then_load_returns_the_same_data(s3):
+    store = SnapshotStore("test-bucket", s3)
+
+    key = store.save("portsmouth", SAMPLE_DATA, TWO_THIRTY_PM)
+
+    assert key == "raw/portsmouth/2026-10-17/14.json"
+    assert store.load("portsmouth", TWO_THIRTY_PM) == SAMPLE_DATA
+
+
+def test_load_later_in_the_same_hour_finds_the_snapshot(s3):
+    store = SnapshotStore("test-bucket", s3)
+    store.save("portsmouth", SAMPLE_DATA, TWO_THIRTY_PM)
+
+    two_fifty_nine = datetime(2026, 10, 17, 14, 59, 0, tzinfo=timezone.utc)
+
+    assert store.load("portsmouth", two_fifty_nine) == SAMPLE_DATA
+
+
+def test_load_returns_none_when_nothing_saved_this_hour(s3):
+    store = SnapshotStore("test-bucket", s3)
+    store.save("portsmouth", SAMPLE_DATA, TWO_THIRTY_PM)
+
+    three_pm = datetime(2026, 10, 17, 15, 0, 0, tzinfo=timezone.utc)
+
+    assert store.load("portsmouth", three_pm) is None
+    assert store.load("london", TWO_THIRTY_PM) is None

@@ -27,13 +27,18 @@ and serve it through an API.
 ```
 app/
   config.py    # settings, read from environment variables / .env
-  locations.py # LOCATIONS: supported place names -> (latitude, longitude)
-  weather.py   # fetch_forecast() calls Open-Meteo; format_forecast() reshapes the data
-  main.py      # FastAPI app (Stage 3)
-  storage.py   # build_key() and save_snapshot_to_s3(): raw snapshots to S3
+  location.py  # Location dataclass, LOCATIONS registry, Location.get_location(name)
+  forecast.py  # HourlyForecast dataclass (one hour of weather)
+  weather.py   # WeatherClient: fetch_raw_forecast(location), get_forecast(location)
+  storage.py   # SnapshotStore: save(location_name, data) to S3
+  collector.py # Collector (all locations -> S3) and handler() for Lambda
+  main.py      # FastAPI app: wires routers together
+  controllers/
+    forecast_controller.py  # ForecastController (logic) + /forecast route (HTTP)
 tests/
-  test_weather.py   # format_forecast and fetch_forecast (requests.get is faked)
-  test_main.py      # API routes via TestClient (fetch_forecast is faked)
+  test_weather.py   # WeatherClient and Location (requests.get is faked)
+  test_main.py      # API routes via TestClient (controller dependency overridden with fake clients)
+  test_collector.py # Collector with fake weather client and fake store
   test_storage.py   # S3 snapshot saving, using moto's fake S3
 pytest.ini          # pytest settings
 requirements.txt  # Python packages: direct dependencies only, pinned
@@ -66,6 +71,7 @@ pytest                           # run tests
 
 ## Conventions
 
+- S3 snapshot keys are hourly: `raw/<location>/<YYYY-MM-DD>/<HH>.json` (UTC). The API checks for this hour's key before calling Open-Meteo, and saves on a miss.
 - Tidied records use the keys `time`, `temperature_c`, `rain_chance_percent`, `wind_kph`.
 - Tests must not depend on the internet; use small hard-coded sample data.
 - Pin versions in `requirements.txt`, and add new packages there when they are installed.
