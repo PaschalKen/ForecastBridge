@@ -47,7 +47,16 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 | 4.6 | Fetch forecasts automatically on a schedule (e.g. hourly) | ⬜ |
 | 4.7 | Logs and alarms in CloudWatch, so failures are noticed | ⬜ |
 
+## 5. Front end
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| 5.1 | Web page served by the API at `/` (no separate server, no build step) | ✅ |
+| 5.2 | Location dropdown filled from `GET /locations` | ⬜ |
+| 5.3 | "Right now" cards: temperature, chance of rain, wind | ⬜ |
+| 5.4 | 48-hour chart: temperature line, rain chance bars | ⬜ |
+| 5.5 | Clear loading and error messages (unknown location, provider down) | ⬜ |
+
 ## Out of scope (for now)
 
 - User accounts or logins
-- A website front end

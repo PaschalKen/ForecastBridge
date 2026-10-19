@@ -163,3 +163,17 @@ def test_storage_failure_does_not_break_the_request():
 
     assert response.status_code == 200
     assert len(response.json()) == 2
+
+
+def test_home_page_serves_the_front_end():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "ForecastBridge" in response.text
+
+
+def test_static_files_are_served():
+    response = client.get("/static/app.js")
+
+    assert response.status_code == 200

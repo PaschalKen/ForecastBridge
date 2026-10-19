@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ForecastBridge</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ForecastBridge</h1>
+      <label>
+        Location
+        <select id="location-select"></select>
+      </label>
+    </header>
+
+    <!-- Shown while loading, or when something goes wrong -->
+    <p id="status" role="status"></p>
+
+    <!-- "Right now" summary: filled in by app.js -->
+    <section id="now" class="cards">
+      <div class="card"><span class="label">Temperature</span><span id="now-temp" class="value">–</span></div>
+      <div class="card"><span class="label">Chance of rain</span><span id="now-rain" class="value">–</span></div>
+      <div class="card"><span class="label">Wind</span><span id="now-wind" class="value">–</span></div>
+    </section>
+
+    <!-- 48-hour chart: drawn by Chart.js into this canvas -->
+    <section class="chart-box">
+      <canvas id="forecast-chart"></canvas>
+    </section>
+  </main>
+
+  <!-- Chart.js from a CDN (pinned version), then our own script -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

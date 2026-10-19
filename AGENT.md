@@ -35,6 +35,9 @@ app/
   main.py      # FastAPI app: wires routers together
   controllers/
     forecast_controller.py  # ForecastController (logic) + /forecast route (HTTP)
+    location_controller.py  # /locations route
+  static/      # front end, served by FastAPI: index.html at /, the rest under /static/
+    index.html, app.js, style.css  # plain HTML/JS + Chart.js from CDN, no build step
 tests/
   test_weather.py   # WeatherClient and Location (requests.get is faked)
   test_main.py      # API routes via TestClient (controller dependency overridden with fake clients)
