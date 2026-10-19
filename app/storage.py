@@ -7,7 +7,7 @@ from app.config import S3_BUCKET
 
 
 class SnapshotStore:
-    """Saves raw forecast snapshots to an S3 bucket."""
+    """Saves and loads raw forecast snapshots in an S3 bucket, one per location per hour."""
 
     def __init__(self, bucket: str, s3_client):
         self.bucket = bucket
@@ -20,17 +20,31 @@ class SnapshotStore:
 
     @staticmethod
     def make_key(location: str, dt: datetime) -> str:
-        """Build the S3 key, e.g. raw/portsmouth/2026-10-17/14-30-05.json"""
-        return f"raw/{location}/{dt.strftime('%Y-%m-%d')}/{dt.strftime('%H-%M-%S')}.json"
+        """Build the S3 key for the hour, e.g. raw/portsmouth/2026-10-17/14.json"""
+        return f"raw/{location}/{dt.strftime('%Y-%m-%d')}/{dt.strftime('%H')}.json"
 
-    def save(self, location: str, data: dict) -> str:
-        """Save raw forecast data to S3 and return the key it was saved under."""
-        key = self.make_key(location, datetime.now(timezone.utc))
+    def save(self, location: str, data: dict, when: datetime | None = None) -> str:
+        """Save raw forecast data to S3 and return the key it was saved under.
+
+        Saving twice in the same hour overwrites the same key, so there are never duplicates.
+        """
+        key = self.make_key(location, when or datetime.now(timezone.utc))
         self.s3_client.put_object(
             Bucket=self.bucket,
             Key=key,
             Body=json.dumps(data),
             ContentType="application/json",
         )
-        
+
         return key
+
+    def load(self, location: str, when: datetime | None = None) -> dict | None:
+        """Return the snapshot saved for this location and hour, or None if there isn't one."""
+        key = self.make_key(location, when or datetime.now(timezone.utc))
+        try:
+            response = self.s3_client.get_object(Bucket=self.bucket, Key=key)
+        except self.s3_client.exceptions.NoSuchKey:
+            return None
+
+        with response["Body"] as body:
+            return json.loads(body.read())
