@@ -20,6 +20,7 @@
     <p id="status" role="status"></p>
 
     <!-- "Right now" summary: filled in by app.js -->
+    <h2 class="now-heading">Right now <span id="now-time"></span></h2>
     <section id="now" class="cards">
       <div class="card"><span class="label">Temperature</span><span id="now-temp" class="value">–</span></div>
       <div class="card"><span class="label">Chance of rain</span><span id="now-rain" class="value">–</span></div>
@@ -27,8 +28,17 @@
     </section>
 
     <!-- 48-hour chart: drawn by Chart.js into this canvas -->
-    <section class="chart-box">
-      <canvas id="forecast-chart"></canvas>
+    <section class="chart-panel">
+      <div class="chart-toolbar">
+        <h2>Next 48 hours</h2>
+        <button id="now-button" type="button" disabled>Show now</button>
+      </div>
+      <!-- On phones the inner box is wider than the screen, so the chart scrolls sideways -->
+      <div id="chart-scroll" class="chart-box">
+        <div class="chart-inner">
+          <canvas id="forecast-chart"></canvas>
+        </div>
+      </div>
     </section>
   </main>
 

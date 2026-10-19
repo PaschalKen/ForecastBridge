@@ -58,6 +58,9 @@ select {
 #status { min-height: 1.5em; color: var(--muted); }
 #status.error { color: var(--error); }
 
+.now-heading { margin: 0 0 8px; font-size: 1rem; font-weight: 600; }
+.now-heading span { color: var(--muted); font-weight: 400; margin-left: 6px; }
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -76,4 +79,41 @@ select {
 .card .label { color: var(--muted); font-size: 0.875rem; }
 .card .value { font-size: 1.75rem; font-weight: 600; }
 
-.chart-box { height: 360px; }
+/* The box scrolls sideways when the chart inside is wider than it */
+.chart-box {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Chart.js sizes the chart to this element */
+.chart-inner {
+  position: relative;
+  height: 360px;
+}
+
+/* Phones: give the 48 hours room to breathe (~30px per hour) and scroll instead of squashing */
+@media (max-width: 700px) {
+  .chart-inner { width: 1440px; }
+}
+
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.chart-toolbar h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+
+button {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:disabled { opacity: 0.5; cursor: default; }
