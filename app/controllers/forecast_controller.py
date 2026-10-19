@@ -81,7 +81,7 @@ router = APIRouter()
 
 
 @router.get("/forecast")
-def get_forecast(location: str, controller: ForecastController = Depends(get_controller)):
+def get_forecast(location: str, controller: ForecastController = Depends(get_controller)) -> list[HourlyForecast]:
     """Translate the controller's results and errors into HTTP responses."""
     try:
         return controller.get_forecast(location)
