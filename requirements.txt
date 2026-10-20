@@ -12,7 +12,8 @@ boto3==1.43.114
 
 # The API (Stage 3)
 fastapi==0.143.2
-uvicorn==0.54.0
+uvicorn==0.54.0   # runs the API locally
+mangum==0.22.0    # runs the API on AWS Lambda
 
 # Testing (Stage 4); httpx2 is needed by FastAPI's TestClient
 pytest==9.1.1
