@@ -67,15 +67,25 @@ pytest                           # run tests
 - [x] Stage 3: FastAPI app with `/health`, `/locations`, `/forecast` (404 unknown location, 503 provider down)
 - [x] Stage 4: pytest tests that do not call the live weather service
 - [x] Stage 5: Front end served by FastAPI (dropdown, now cards, 48-hour chart, Show now button)
-- [x] AWS 1: Account (Free plan, eu-west-2), billing alarm, IAM user `paschal-admin` used via CLI profile `forecastbridge`
+- [x] AWS 1: Account (Free plan, locked to eu-north-1 Stockholm), billing alarm, IAM user `paschal-admin` used via CLI profile `forecastbridge`
 - [x] AWS 2: Save forecast snapshots to S3; API caches per location per hour
-- [ ] AWS 3: Collector on Lambda, run hourly by EventBridge Scheduler (next)
-- [ ] AWS 4: API and front end on Lambda (Mangum + Function URL)
-- [ ] AWS 5: CloudWatch logs and alarms; optionally DynamoDB
+- [x] AWS 3: Collector on Lambda, run hourly by EventBridge Scheduler
+- [ ] AWS 4: API and front end on Lambda (Mangum + Function URL) (next)
+- [ ] AWS 5: CloudWatch alarms; optionally DynamoDB
 
-AWS account note: on this Free plan account, an organization rule (SCP) blocks creating
-resources (e.g. buckets) from the CLI. Create infrastructure in the AWS console; code can then
-read and write data in it.
+AWS account notes:
+- The Free plan locks this project to **eu-north-1 (Stockholm)**. Create everything there.
+- An organization rule (SCP) blocks creating resources (e.g. buckets) from the CLI. Create
+  infrastructure in the AWS console; code can then read and write data in it.
+
+Deployed resources (all eu-north-1):
+- S3 bucket `forecastbridge-snapshots-108248327537`
+- Lambda `forecastbridge-collector`: Python 3.12, arm64, 256 MB, 1 min timeout,
+  handler `app.collector.handler`, env `S3_BUCKET`. Code: `./scripts/build_lambda.sh` then upload
+  `build/collector.zip` in the console.
+- IAM role `forecastbridge-collector-role`: `AWSLambdaBasicExecutionRole` + inline
+  `forecastbridge-collector-s3-write` (`s3:PutObject` on `raw/*` only)
+- EventBridge Scheduler `forecastbridge-hourly`: `cron(5 * * * ? *)` UTC, retries 3, max age 1 h
 
 ## Conventions
 

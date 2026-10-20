@@ -29,8 +29,9 @@ It is a learning project for Python and AWS.
 - **Caching in S3**: the first request for a location in each hour fetches from Open-Meteo
   and saves the raw response to S3 as `raw/<location>/<YYYY-MM-DD>/<HH>.json` (UTC). Later
   requests that hour are served from S3. If S3 is unavailable, requests still work.
-- **Collector**: saves a snapshot of every location in one go. It will run hourly on AWS
-  Lambda; for now it runs by hand.
+- **Collector**: saves a snapshot of every location in one go. It runs on AWS Lambda at 5 past
+  every hour (EventBridge Scheduler), so the bucket builds up an hourly history on its own.
+  One location failing doesn't stop the others.
 
 Supported locations: Portsmouth, London, Manchester and Edinburgh (add more in
 `app/location.py`).
@@ -56,6 +57,7 @@ uvicorn app.main:app --reload       # web page at http://127.0.0.1:8000, API doc
 python -m app.weather london        # print the next few hours for one location
 python -m app.collector             # save a snapshot of every location to S3
 pytest                              # run the tests (no internet or AWS needed)
+./scripts/build_lambda.sh           # build build/collector.zip for the Lambda function
 ```
 
 ## Configuration
@@ -85,7 +87,7 @@ tests/             # pytest, using fakes and moto instead of real services
 
 ## Roadmap
 
-Next: run the collector hourly on AWS Lambda, then put the API and web page online.
+Next: put the API and web page online on AWS Lambda, then add CloudWatch alarms.
 See [REQUIREMENTS.md](REQUIREMENTS.md) for all planned features and progress.
 
 Weather data by [Open-Meteo](https://open-meteo.com/) (CC BY 4.0).
