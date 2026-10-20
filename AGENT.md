@@ -70,7 +70,11 @@ pytest                           # run tests
 - [x] AWS 1: Account (Free plan, locked to eu-north-1 Stockholm), billing alarm, IAM user `paschal-admin` used via CLI profile `forecastbridge`
 - [x] AWS 2: Save forecast snapshots to S3; API caches per location per hour
 - [x] AWS 3: Collector on Lambda, run hourly by EventBridge Scheduler
-- [ ] AWS 4: API and front end on Lambda (Mangum + Function URL) (next)
+- [ ] AWS 4: API and front end on Lambda (Mangum + Function URL) (next). Code done
+  (`app/lambda_api.py`, `build/api.zip`); still to do in the console: role
+  `forecastbridge-api-role` (GetObject/PutObject on `raw/*`, ListBucket with prefix `raw/*`),
+  function `forecastbridge-api` (Python 3.12, arm64, 512 MB, 15 s, handler
+  `app.lambda_api.handler`, env `S3_BUCKET`), then a Function URL.
 - [ ] AWS 5: CloudWatch alarms; optionally DynamoDB
 
 AWS account notes:
