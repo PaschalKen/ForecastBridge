@@ -73,7 +73,8 @@ pytest                           # run tests
 - [x] AWS 3: Collector on Lambda, run hourly by EventBridge Scheduler
 - [x] AWS 4: API and front end on Lambda (Mangum + public Function URL)
 - [x] AWS 5: CloudWatch log retention (7 days) and an error alarm emailing via SNS
-- [ ] Ideas next: geocoding any place (1.6), a forecast history chart, CI with GitHub Actions
+- [ ] Future ideas: see section 6 of `REQUIREMENTS.md` (search any place, plain-language advice,
+  compare cities, forecast accuracy, history chart, units toggle, CI)
 
 AWS account notes:
 - The Free plan locks this project to **eu-north-1 (Stockholm)**. Create everything there.

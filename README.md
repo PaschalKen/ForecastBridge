@@ -123,7 +123,11 @@ REQUIREMENTS.md      Feature list and status
 ## Possible next steps
 
 - Search for any place by name, using Open-Meteo's geocoding API
-- A chart of how the forecast for a given hour changed over time, from the stored history
+- Plain-language advice such as "Rain likely from 3pm"
+- Compare several cities on one chart
+- Measure forecast accuracy from the stored hourly history
 - Run the tests automatically on every push with GitHub Actions
+
+The full list is in [REQUIREMENTS.md](REQUIREMENTS.md#6-future-ideas).
 
 Weather data by [Open-Meteo](https://open-meteo.com/) (CC BY 4.0).
