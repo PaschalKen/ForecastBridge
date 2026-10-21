@@ -45,6 +45,7 @@ tests/
   test_storage.py   # S3 snapshot saving, using moto's fake S3
 pytest.ini          # pytest settings
 requirements.txt  # Python packages: direct dependencies only, pinned
+RUNBOOK.md        # running locally, deploying to AWS, health checks, troubleshooting
 REQUIREMENTS.md   # feature requirements and their status
 .env.example      # template for .env (the real .env is not committed)
 ```
@@ -70,26 +71,17 @@ pytest                           # run tests
 - [x] AWS 1: Account (Free plan, locked to eu-north-1 Stockholm), billing alarm, IAM user `paschal-admin` used via CLI profile `forecastbridge`
 - [x] AWS 2: Save forecast snapshots to S3; API caches per location per hour
 - [x] AWS 3: Collector on Lambda, run hourly by EventBridge Scheduler
-- [ ] AWS 4: API and front end on Lambda (Mangum + Function URL) (next). Code done
-  (`app/lambda_api.py`, `build/api.zip`); still to do in the console: role
-  `forecastbridge-api-role` (GetObject/PutObject on `raw/*`, ListBucket with prefix `raw/*`),
-  function `forecastbridge-api` (Python 3.12, arm64, 512 MB, 15 s, handler
-  `app.lambda_api.handler`, env `S3_BUCKET`), then a Function URL.
-- [ ] AWS 5: CloudWatch alarms; optionally DynamoDB
+- [x] AWS 4: API and front end on Lambda (Mangum + public Function URL)
+- [x] AWS 5: CloudWatch log retention (7 days) and an error alarm emailing via SNS
+- [ ] Ideas next: geocoding any place (1.6), a forecast history chart, CI with GitHub Actions
 
 AWS account notes:
 - The Free plan locks this project to **eu-north-1 (Stockholm)**. Create everything there.
 - An organization rule (SCP) blocks creating resources (e.g. buckets) from the CLI. Create
   infrastructure in the AWS console; code can then read and write data in it.
 
-Deployed resources (all eu-north-1):
-- S3 bucket `forecastbridge-snapshots-108248327537`
-- Lambda `forecastbridge-collector`: Python 3.12, arm64, 256 MB, 1 min timeout,
-  handler `app.collector.handler`, env `S3_BUCKET`. Code: `./scripts/build_lambda.sh` then upload
-  `build/collector.zip` in the console.
-- IAM role `forecastbridge-collector-role`: `AWSLambdaBasicExecutionRole` + inline
-  `forecastbridge-collector-s3-write` (`s3:PutObject` on `raw/*` only)
-- EventBridge Scheduler `forecastbridge-hourly`: `cron(5 * * * ? *)` UTC, retries 3, max age 1 h
+Deployed resources, deployment steps and troubleshooting are in `RUNBOOK.md`; keep it up to
+date when anything on AWS changes.
 
 ## Conventions
 

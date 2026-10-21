@@ -41,11 +41,11 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 |---|-------------|--------|
 | 4.1 | AWS account with billing alarm and a non-root IAM user | ✅ |
 | 4.2 | Save raw forecast snapshots to S3, organised by location and date | ✅ |
-| 4.3 | Run the API on Lambda behind API Gateway, reachable over HTTPS | ⬜ |
+| 4.3 | Run the API and web page on Lambda, reachable over HTTPS (Function URL) | ✅ |
 | 4.4 | Store tidied forecasts in DynamoDB for fast lookups | ⬜ |
 | 4.5 | Serve cached forecasts instead of calling the provider on every request (S3, one snapshot per location per hour) | ✅ |
 | 4.6 | Fetch forecasts automatically on a schedule (e.g. hourly) | ✅ |
-| 4.7 | Logs and alarms in CloudWatch, so failures are noticed | ⬜ |
+| 4.7 | Logs and alarms in CloudWatch, so failures are noticed | ✅ |
 
 ## 5. Front end
 
