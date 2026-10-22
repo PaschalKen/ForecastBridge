@@ -71,6 +71,29 @@ exists.
 | 6.5 | Forecast history chart | Pick an hour and see how its forecast changed across past snapshots | The hourly `raw/` snapshots, `SnapshotStore.load` |
 | 6.6 | Units toggle | Switch between °C/°F and km/h/mph, remembered in the browser (`localStorage`) | `app.js` |
 | 6.7 | Automatic tests on GitHub | GitHub Actions runs `pytest` on every push | `tests/` |
+| 6.8 | AI weather summary | A short, friendly summary of the next 24 hours written by an AI model (Claude), e.g. "A dry, bright morning in London, with showers likely after 3pm. Take an umbrella if you're out this evening." See the details below | 6.2, `HourlyForecast` records, the hourly collector, `SnapshotStore` |
+
+### 6.8 AI weather summary: details
+
+**Why:** the chart shows the numbers, but most people just want to know what the day will be
+like. A language model can turn 24 hourly records into two or three sentences of plain
+English, which simple rules (6.2) would find hard to make sound natural.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| 6.8.1 | Send the tidied hourly records for the next 24 hours (not the raw Open-Meteo data) to the Claude API and ask for a summary of at most three sentences | ⬜ |
+| 6.8.2 | Generate summaries in the hourly collector, once per city per hour, so page visits never trigger an AI call. This keeps costs small and predictable (4 cities × 24 hours = 96 calls a day) | ⬜ |
+| 6.8.3 | Save each summary in S3 next to its snapshot, e.g. `summaries/<city>/<date>/<hour>.json`, and include the model name and time it was written | ⬜ |
+| 6.8.4 | New endpoint `GET /summary?location=<name>` returns this hour's summary, and the web page shows it above the "Right now" cards | ⬜ |
+| 6.8.5 | The feature is optional: if no API key is set, or the AI call fails or times out, the page still works and simply hides the summary (or falls back to the rule based advice from 6.2) | ⬜ |
+| 6.8.6 | The API key lives in an environment variable on the collector Lambda only, is added to `.env.example` without a value, and is never sent to the browser or committed to Git | ⬜ |
+| 6.8.7 | Use a small, fast model, keep the prompt short, and cap the length of the reply to keep each call cheap | ⬜ |
+| 6.8.8 | Tests use a fake summariser class (injected like `WeatherClient`), so they never call the real AI service | ⬜ |
+| 6.8.9 | The summary must only describe what is in the forecast data: no invented warnings, and a note on the page that it is AI generated | ⬜ |
+
+**Stretch ideas:** ask a question about the weather ("Is Saturday good for a bike ride in
+Manchester?") answered from the stored forecast; or explain the forecast accuracy results from
+6.4 in plain language.
 
 ## Out of scope (for now)
 
