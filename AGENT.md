@@ -89,6 +89,8 @@ date when anything on AWS changes.
 - S3 snapshot keys are hourly: `raw/<location>/<YYYY-MM-DD>/<HH>.json` (UTC). The API checks for this hour's key before calling Open-Meteo, and saves on a miss.
 - Tidied records use the keys `time`, `temperature_c`, `rain_chance_percent`, `wind_kph`.
 - Tests must not depend on the internet; use small hard-coded sample data.
+- Tests must also pass without a `.env` file or AWS credentials: GitHub Actions
+  (`.github/workflows/tests.yml`) runs them on a clean machine for every push and pull request.
 - Pin versions in `requirements.txt`, and add new packages there when they are installed.
 - Settings go in `app/config.py`, read with `os.getenv` and a sensible default. Add new ones to `.env.example`.
 - Never commit secrets or AWS credentials.

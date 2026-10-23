@@ -1,5 +1,7 @@
 # ForecastBridge
 
+[![Tests](https://github.com/PaschalKen/ForecastBridge/actions/workflows/tests.yml/badge.svg)](https://github.com/PaschalKen/ForecastBridge/actions/workflows/tests.yml)
+
 **[Live demo](https://4hgo4skmrmq4avm52lrgj23lzu0gatfn.lambda-url.eu-north-1.on.aws/)**
 
 ForecastBridge is a small weather data platform on AWS. Every hour it collects forecasts for
@@ -79,7 +81,7 @@ Supported cities: Portsmouth, London, Manchester and Edinburgh.
   `ForecastController` receive what they depend on, so tests can pass in fakes instead of
   patching.
 - **Tests never touch the internet or AWS.** They use hand-made sample data, fake classes,
-  and moto's in-memory S3.
+  and moto's in-memory S3. GitHub Actions runs them on every push and pull request.
 
 ## Running it locally
 
@@ -116,6 +118,8 @@ app/
 tests/               pytest tests
 scripts/
   build_lambda.sh    Builds the Lambda deployment zips
+.github/workflows/
+  tests.yml          Runs the tests on GitHub on every push and pull request
 RUNBOOK.md           Running, deploying and troubleshooting
 REQUIREMENTS.md      Feature list and status
 ```
@@ -126,7 +130,6 @@ REQUIREMENTS.md      Feature list and status
 - Plain-language advice such as "Rain likely from 3pm"
 - Compare several cities on one chart
 - Measure forecast accuracy from the stored hourly history
-- Run the tests automatically on every push with GitHub Actions
 
 The full list is in [REQUIREMENTS.md](REQUIREMENTS.md#6-future-ideas).
 

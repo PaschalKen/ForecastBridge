@@ -70,7 +70,7 @@ exists.
 | 6.4 | Forecast accuracy | Use the hourly history in S3 to compare what was forecast for an hour with what was forecast closer to (or at) that hour, and show how reliable forecasts are | The hourly `raw/` snapshots |
 | 6.5 | Forecast history chart | Pick an hour and see how its forecast changed across past snapshots | The hourly `raw/` snapshots, `SnapshotStore.load` |
 | 6.6 | Units toggle | Switch between °C/°F and km/h/mph, remembered in the browser (`localStorage`) | `app.js` |
-| 6.7 | Automatic tests on GitHub | GitHub Actions runs `pytest` on every push | `tests/` |
+| 6.7 | Automatic tests on GitHub ✅ | GitHub Actions runs `pytest` on every push and pull request (`.github/workflows/tests.yml`) | `tests/` |
 
 ## Out of scope (for now)
 
