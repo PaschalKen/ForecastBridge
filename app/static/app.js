@@ -62,6 +62,40 @@ async function loadForecast(name) {
   showNow(records, nowIndex);
   drawChart(records, nowIndex);
   showStatus("");
+  loadAdvice(name);
+}
+
+// An emoji for each kind of advice the API sends back
+const ADVICE_ICONS = {
+  rain: "🌧️",
+  "rain-possible": "🌦️",
+  dry: "☀️",
+  cold: "🌡️",
+  jacket: "🧥",
+  wind: "💨",
+};
+
+// Fill the "Next 12 hours" list from GET /advice?location=...
+// The advice is a bonus: if it fails, the rest of the page still works, so just hide the list.
+async function loadAdvice(name) {
+  const list = document.getElementById("advice-list");
+  list.replaceChildren(); // clear the previous location's advice
+
+  let advice;
+  try {
+    const response = await fetch(`/advice?location=${encodeURIComponent(name)}`);
+    if (!response.ok) return;
+    advice = await response.json();
+  } catch {
+    return;
+  }
+
+  advice.forEach(({ kind, message }) => {
+    const item = document.createElement("li");
+    item.className = `advice advice-${kind}`;
+    item.textContent = `${ADVICE_ICONS[kind] ?? "•"} ${message}`;
+    list.appendChild(item);
+  });
 }
 
 // The current hour in UK time, in the same format as the API: "2026-10-19T18:00"

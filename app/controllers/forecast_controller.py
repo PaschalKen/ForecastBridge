@@ -6,6 +6,7 @@ import requests
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.advice import Advice, build_advice, find_now_index
 from app.forecast import HourlyForecast
 from app.location import LOCATIONS, Location
 from app.storage import SnapshotStore
@@ -34,6 +35,18 @@ class ForecastController:
         self.store = store
 
     def get_forecast(self, name: str) -> list[HourlyForecast]:
+        return WeatherClient.format_forecast(self._get_raw(name))
+
+    def get_advice(self, name: str) -> list[Advice]:
+        """Plain-language advice for the next few hours, starting from the current hour."""
+        raw = self._get_raw(name)
+        records = WeatherClient.format_forecast(raw)
+        now_index = find_now_index(records, raw.get("utc_offset_seconds", 0))
+        return build_advice(records, now_index)
+
+    def _get_raw(self, name: str) -> dict:
+        """This hour's raw forecast for a location: from the store if saved, otherwise from
+        Open-Meteo (then saved for the rest of the hour)."""
         location = Location.get_location(name)
         if location is None:
             raise LocationNotFoundError(name)
@@ -49,7 +62,7 @@ class ForecastController:
                 raise ProviderUnavailableError() from error
             self._save_to_store(location, raw, now)
 
-        return WeatherClient.format_forecast(raw)
+        return raw
 
     # Storage is a bonus: if S3 has a problem, log it and carry on rather than fail the request.
 
@@ -80,18 +93,29 @@ def get_controller() -> ForecastController:
 router = APIRouter()
 
 
-@router.get("/forecast")
-def get_forecast(location: str, controller: ForecastController = Depends(get_controller)) -> list[HourlyForecast]:
-    """Translate the controller's results and errors into HTTP responses."""
-    try:
-        return controller.get_forecast(location)
-    except LocationNotFoundError:
-        raise HTTPException(
+def to_http_error(location: str, error: Exception) -> HTTPException:
+    """Turn the controller's errors into HTTP responses (shared by every route here)."""
+    if isinstance(error, LocationNotFoundError):
+        return HTTPException(
             status_code=404,
             detail=f"Location '{location.lower()}' not found. Available: {', '.join(LOCATIONS)}",
         )
-    except ProviderUnavailableError:
-        raise HTTPException(
-            status_code=503,
-            detail="Weather provider is unavailable. Try again later.",
-        )
+    return HTTPException(status_code=503, detail="Weather provider is unavailable. Try again later.")
+
+
+@router.get("/forecast")
+def get_forecast(location: str, controller: ForecastController = Depends(get_controller)) -> list[HourlyForecast]:
+    """48 hourly records for a location."""
+    try:
+        return controller.get_forecast(location)
+    except (LocationNotFoundError, ProviderUnavailableError) as error:
+        raise to_http_error(location, error)
+
+
+@router.get("/advice")
+def get_advice(location: str, controller: ForecastController = Depends(get_controller)) -> list[Advice]:
+    """Plain-language advice for the next 12 hours, e.g. "Rain likely from 3pm (80%)"."""
+    try:
+        return controller.get_advice(location)
+    except (LocationNotFoundError, ProviderUnavailableError) as error:
+        raise to_http_error(location, error)

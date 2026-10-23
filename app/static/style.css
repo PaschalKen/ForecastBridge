@@ -61,6 +61,25 @@ select {
 .now-heading { margin: 0 0 8px; font-size: 1rem; font-weight: 600; }
 .now-heading span { color: var(--muted); font-weight: 400; margin-left: 6px; }
 
+.advice-panel { margin-bottom: 16px; }
+
+.advice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.advice {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.95rem;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

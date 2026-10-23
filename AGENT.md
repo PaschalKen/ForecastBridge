@@ -30,6 +30,7 @@ app/
   location.py  # Location dataclass, LOCATIONS registry, Location.get_location(name)
   forecast.py  # HourlyForecast dataclass (one hour of weather)
   weather.py   # WeatherClient: fetch_raw_forecast(location), get_forecast(location)
+  advice.py    # pure rules: hourly records -> plain-language Advice (thresholds at the top)
   storage.py   # SnapshotStore: save(location_name, data) to S3
   collector.py # Collector (all locations -> S3) and handler() for Lambda
   main.py      # FastAPI app: wires routers together

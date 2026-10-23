@@ -27,6 +27,12 @@
       <div class="card"><span class="label">Wind</span><span id="now-wind" class="value">–</span></div>
     </section>
 
+    <!-- Plain-language advice for the next 12 hours: filled in by app.js from GET /advice -->
+    <section class="advice-panel">
+      <h2 class="now-heading">Next 12 hours</h2>
+      <ul id="advice-list" class="advice-list"></ul>
+    </section>
+
     <!-- 48-hour chart: drawn by Chart.js into this canvas -->
     <section class="chart-panel">
       <div class="chart-toolbar">
