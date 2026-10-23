@@ -69,7 +69,8 @@ There is no automatic deployment. A change goes live in four steps.
 pytest
 ```
 
-Don't deploy if anything fails.
+Don't deploy if anything fails. GitHub also runs the tests on every push and pull request
+(the **Actions** tab on GitHub, or the tick/cross next to each commit), so check that's green too.
 
 ### Step 2: Build the zips
 
