@@ -16,6 +16,8 @@ an API, tests, a scheduled data pipeline, cloud storage, permissions and monitor
 - **Web page:** choose a city to see the current hour's temperature, chance of rain and wind,
   and a 48-hour chart of temperature and rain. A "Show now" button highlights the current
   hour, and on phones the chart scrolls sideways.
+- **Plain-language advice** for the next 12 hours, such as "Rain likely from 3pm (80%)",
+  "Coldest at 6am: 4°C" and "Take a jacket", worked out from the forecast with tested rules.
 - **REST API** with interactive docs at `/docs`.
 - **Hourly collection:** a scheduled AWS Lambda job saves every city's forecast to S3 at 5 past
   each hour, building up a history.
@@ -55,6 +57,7 @@ CloudWatch: logs, plus an alarm that emails (SNS) if a collector run fails
 | Endpoint | Returns |
 |----------|---------|
 | `GET /forecast?location=london` | 48 hourly records for today and tomorrow. 404 for an unknown city, 503 if Open-Meteo is unavailable |
+| `GET /advice?location=london` | Plain-language advice for the next 12 hours, e.g. `{"kind": "rain", "message": "Rain likely from 3pm (80%)"}` |
 | `GET /locations` | Supported city names |
 | `GET /health` | `{"status": "ok"}` |
 | `GET /docs` | Interactive API documentation |
@@ -93,7 +96,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env              # set S3_BUCKET and AWS_PROFILE to enable caching
 uvicorn app.main:app --reload     # http://127.0.0.1:8000
-pytest                            # 27 tests
+pytest                            # 48 tests
 ```
 
 Without AWS credentials the app still works; it just doesn't cache.
@@ -109,6 +112,7 @@ app/
   lambda_api.py      Lambda entry point for the API (Mangum)
   controllers/       /forecast (with S3 caching) and /locations
   weather.py         WeatherClient: fetches from Open-Meteo, formats hourly records
+  advice.py          Rules that turn hourly records into plain-language advice
   storage.py         SnapshotStore: saves and loads snapshots in S3
   collector.py       Collector and its Lambda entry point (hourly job)
   location.py        Location and the list of supported cities
@@ -127,7 +131,6 @@ REQUIREMENTS.md      Feature list and status
 ## Possible next steps
 
 - Search for any place by name, using Open-Meteo's geocoding API
-- Plain-language advice such as "Rain likely from 3pm"
 - Compare several cities on one chart
 - Measure forecast accuracy from the stored hourly history
 

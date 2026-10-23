@@ -177,3 +177,33 @@ def test_static_files_are_served():
     response = client.get("/static/app.js")
 
     assert response.status_code == 200
+
+
+def test_advice_for_known_location_returns_messages():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth"})
+
+    # SAMPLE_DATA's dates are in the past, so advice starts from its first hour:
+    # rain 20% then 35%, temperatures 12.4 then 11.9, light wind
+    assert response.status_code == 200
+    assert response.json() == [
+        {"kind": "rain-possible", "message": "Small chance of rain around 1am (35%)"},
+        {"kind": "cold", "message": "Coldest at 1am: 11.9°C"},
+    ]
+
+
+def test_advice_for_unknown_location_returns_404():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "paris"})
+
+    assert response.status_code == 404
+
+
+def test_advice_when_fetch_fails_returns_503():
+    use(BrokenWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth"})
+
+    assert response.status_code == 503
