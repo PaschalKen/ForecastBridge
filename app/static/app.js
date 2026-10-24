@@ -70,6 +70,7 @@ const ADVICE_ICONS = {
   rain: "🌧️",
   "rain-possible": "🌦️",
   dry: "☀️",
+  umbrella: "☂️",
   cold: "🌡️",
   jacket: "🧥",
   wind: "💨",

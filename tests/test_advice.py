@@ -7,6 +7,7 @@ from app.advice import (
     format_hour,
     rain_advice,
     temperature_advice,
+    umbrella_advice,
     wind_advice,
 )
 from app.forecast import HourlyForecast
@@ -64,6 +65,20 @@ def test_dry_message_uses_the_number_of_hours_given():
     assert rain_advice(day(18, 5)) == Advice("dry", "Dry for the next 5 hours")
 
 
+# --- umbrella_advice ----------------------------------------------------------
+
+def test_umbrella_when_any_hour_reaches_60_percent():
+    hours = day(9, 12, **{"19": {"rain": 60}})
+
+    assert umbrella_advice(hours) == Advice("umbrella", "Take an umbrella")
+
+
+def test_no_umbrella_for_a_small_chance_of_rain():
+    hours = day(9, 12, **{"14": {"rain": 59}})
+
+    assert umbrella_advice(hours) is None
+
+
 # --- temperature_advice -------------------------------------------------------
 
 def test_reports_the_coldest_hour():
@@ -114,12 +129,12 @@ def test_build_advice_only_looks_at_the_next_12_hours_from_now():
     assert advice[0] == Advice("rain", "Rain likely from 8pm (70%)")
 
 
-def test_build_advice_returns_rain_then_temperature_then_wind():
+def test_build_advice_returns_rain_then_umbrella_then_temperature_then_wind():
     records = day(0, 24, **{"10": {"rain": 70, "temp": 5, "wind": 40}})
 
     kinds = [a.kind for a in build_advice(records, now_index=9)]
 
-    assert kinds == ["rain", "cold", "jacket", "wind"]
+    assert kinds == ["rain", "umbrella", "cold", "jacket", "wind"]
 
 
 def test_build_advice_leaves_out_wind_when_calm():
