@@ -11,13 +11,14 @@ from app.forecast import HourlyForecast
 HOURS_AHEAD = 12             # how far ahead the advice looks
 RAIN_LIKELY_PERCENT = 60     # at or above this: "Rain likely"
 RAIN_POSSIBLE_PERCENT = 30   # at or above this (but below likely): "Small chance of rain"
+UMBRELLA_PERCENT = RAIN_LIKELY_PERCENT  # any hour at or above this: "Take an umbrella"
 JACKET_BELOW_C = 10          # coldest hour below this: "Take a jacket"
 WINDY_KPH = 30               # strongest wind at or above this: "Windy"
 
 
 @dataclass(frozen=True)
 class Advice:
-    kind: str     # "rain", "rain-possible", "dry", "cold", "jacket" or "wind"
+    kind: str     # "rain", "rain-possible", "dry", "umbrella", "cold", "jacket" or "wind"
     message: str  # the sentence shown to the user
 
 
@@ -50,6 +51,13 @@ def rain_advice(hours: list[HourlyForecast]) -> Advice:
     return Advice("dry", f"Dry for the next {len(hours)} hours")
 
 
+def umbrella_advice(hours: list[HourlyForecast]) -> Advice | None:
+    """Advice("umbrella", "Take an umbrella") if any hour reaches UMBRELLA_PERCENT, otherwise None."""
+    if any(h.rain_chance_percent >= UMBRELLA_PERCENT for h in hours):
+        return Advice("umbrella", "Take an umbrella")
+    return None
+
+
 def temperature_advice(hours: list[HourlyForecast]) -> list[Advice]:
     """The coldest hour, plus a jacket suggestion if it's below JACKET_BELOW_C."""
     coldest = min(hours, key=lambda h: h.temperature_c)
@@ -72,12 +80,18 @@ def wind_advice(hours: list[HourlyForecast]) -> Advice | None:
 
 def build_advice(records: list[HourlyForecast], now_index: int) -> list[Advice]:
     """All the advice for the HOURS_AHEAD hours starting at records[now_index]:
-    rain, then temperature, then wind (only if windy). [] if no hours are left."""
+    rain, umbrella (if rain is likely), temperature, then wind (if windy). [] if no hours are left."""
     hours = records[now_index:now_index + HOURS_AHEAD]
     if not hours:
         return []
 
-    advice = [rain_advice(hours)] + temperature_advice(hours)
+    advice = [rain_advice(hours)]
+
+    umbrella = umbrella_advice(hours)
+    if umbrella is not None:
+        advice.append(umbrella)
+
+    advice += temperature_advice(hours)
 
     wind = wind_advice(hours)
     if wind is not None:
