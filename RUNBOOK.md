@@ -99,11 +99,37 @@ change either function's runtime or architecture without changing the script too
 | `app/weather.py`, `app/storage.py`, `app/location.py`, `app/forecast.py`, `app/config.py` | ✅ | ✅ |
 | A library version in `requirements.txt` | ✅ if it's in `api.zip` | ✅ if it's in `collector.zip` |
 
-For each function:
+**From the terminal (recommended).** The account's rules block *creating* resources from the CLI,
+but updating a function's code is allowed:
 
-1. Lambda console (Stockholm), then open the function.
-2. **Code** tab, then **Update**, then **.zip file**, choose the zip, then **Save**.
-3. Ignore a "file not found" editor tab if one appears; the code is uploaded.
+```bash
+# API (web page + /forecast, /advice, ...)
+aws lambda update-function-code --function-name forecastbridge-api \
+  --zip-file fileb://build/api.zip --profile forecastbridge
+aws lambda wait function-updated --function-name forecastbridge-api --profile forecastbridge
+
+# Collector (hourly job)
+aws lambda update-function-code --function-name forecastbridge-collector \
+  --zip-file fileb://build/collector.zip --profile forecastbridge
+aws lambda wait function-updated --function-name forecastbridge-collector --profile forecastbridge
+```
+
+The `wait` command returns once the new code is live.
+
+**Or from the console:** open the function (Stockholm), then **Code**, **Update**, **.zip file**,
+choose the zip, and click **Save** in the upload dialog. Wait for the green "Successfully updated"
+banner; closing the dialog without saving leaves the old code running.
+
+**Confirm the upload happened** (CodeSize should match the zip's size, LastModified should be now):
+
+```bash
+aws lambda get-function-configuration --function-name forecastbridge-api \
+  --query '{LastModified:LastModified,CodeSize:CodeSize}' --profile forecastbridge
+ls -l build/api.zip
+```
+
+Browsers may keep an old copy of `app.js`: after a front-end change, hard refresh the live site
+(Cmd + Shift + R).
 
 ### Step 4: Check it
 
