@@ -14,7 +14,7 @@ Status: ✅ done · 🔨 in progress · ⬜ not started
 | 1.3 | Tidy the provider's data into one record per hour | ✅ |
 | 1.4 | Support a fixed list of UK locations by name (Portsmouth, London, Manchester, Edinburgh) | ✅ |
 | 1.5 | Fail clearly, not silently, when the weather provider is down or slow (timeout) | ✅ |
-| 1.6 | Look up any place by name using Open-Meteo's geocoding API, instead of only the fixed list | ⬜ |
+| 1.6 | Look up any place by name using Open-Meteo's geocoding API, instead of only the fixed list | ✅ |
 
 ## 2. API
 
@@ -64,7 +64,7 @@ exists.
 
 | # | Idea | What it means | Builds on |
 |---|------|---------------|-----------|
-| 6.1 | Search any place | A search box instead of the fixed dropdown, using Open-Meteo's free geocoding API to turn a place name into coordinates (see 1.6) | `Location.get_location`, `/locations` |
+| 6.1 | Search any place ✅ | A search box instead of the fixed dropdown, using Open-Meteo's free geocoding API to turn a place name into coordinates (see 1.6) | `Location.get_location`, `/locations` |
 | 6.2 | Plain-language advice ✅ | Turn the numbers into short advice, e.g. "Rain likely from 3pm", "Coldest at 6am", "Take a jacket" | `HourlyForecast` records, the "Right now" cards |
 | 6.3 | Compare cities | Show two or three cities on one chart, side by side | `/forecast`, the Chart.js chart |
 | 6.4 | Forecast accuracy | Use the hourly history in S3 to compare what was forecast for an hour with what was forecast closer to (or at) that hour, and show how reliable forecasts are | The hourly `raw/` snapshots |

@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.advice import Advice, build_advice, find_now_index
 from app.forecast import HourlyForecast
-from app.location import LOCATIONS, Location
+from app.geocoding import GeocodingClient, get_geocoding
+from app.location import LOCATIONS, Location, place_id_from
 from app.storage import SnapshotStore
 from app.weather import WeatherClient
 
@@ -30,9 +31,10 @@ class ForecastController:
     then saves what it fetched so the next request this hour is served from the store.
     """
 
-    def __init__(self, weather: WeatherClient, store: SnapshotStore):
+    def __init__(self, weather: WeatherClient, store: SnapshotStore, geocoding: GeocodingClient | None = None):
         self.weather = weather
         self.store = store
+        self.geocoding = geocoding or get_geocoding()
 
     def get_forecast(self, name: str) -> list[HourlyForecast]:
         return WeatherClient.format_forecast(self._get_raw(name))
@@ -47,9 +49,7 @@ class ForecastController:
     def _get_raw(self, name: str) -> dict:
         """This hour's raw forecast for a location: from the store if saved, otherwise from
         Open-Meteo (then saved for the rest of the hour)."""
-        location = Location.get_location(name)
-        if location is None:
-            raise LocationNotFoundError(name)
+        location = self._resolve(name)
 
         # One timestamp for the load and the save, so both use the same hourly key
         now = datetime.now(timezone.utc)
@@ -63,6 +63,24 @@ class ForecastController:
             self._save_to_store(location, raw, now)
 
         return raw
+
+    def _resolve(self, name: str) -> Location:
+        """A featured city ("london") or a searched place ("place-2654710") -> its Location."""
+        location = Location.get_location(name)
+        if location is not None:
+            return location
+
+        place_id = place_id_from(name)
+        if place_id is None:
+            raise LocationNotFoundError(name)
+
+        try:
+            place = self.geocoding.get(place_id)
+        except requests.RequestException as error:
+            raise ProviderUnavailableError() from error
+        if place is None:
+            raise LocationNotFoundError(name)
+        return place
 
     # Storage is a bonus: if S3 has a problem, log it and carry on rather than fail the request.
 

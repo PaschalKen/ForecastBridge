@@ -64,3 +64,18 @@ def test_fetch_raw_forecast_sends_coordinates_and_returns_json(monkeypatch):
 def test_get_location_ignores_capitals_and_returns_none_if_unknown():
     assert Location.get_location("London").name == "london"
     assert Location.get_location("paris") is None
+
+
+def test_fetch_raw_forecast_asks_for_the_places_own_timezone(monkeypatch):
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(params)
+        return FakeResponse()
+
+    monkeypatch.setattr(weather.requests, "get", fake_get)
+    paris = Location("place-2988507", 48.85, 2.35, label="Paris, Île-de-France, France", timezone="Europe/Paris")
+
+    WeatherClient().fetch_raw_forecast(paris)
+
+    assert calls[0]["timezone"] == "Europe/Paris"

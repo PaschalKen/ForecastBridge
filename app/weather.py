@@ -21,7 +21,7 @@ class WeatherClient:
             "longitude": location.longitude,
             "hourly": "temperature_2m,precipitation_probability,wind_speed_10m",
             "forecast_days": 2,
-            "timezone": "Europe/London",
+            "timezone": location.timezone,  # times come back in the place's own time zone
         }
 
         response = requests.get(self.url, params=params, timeout=self.timeout)

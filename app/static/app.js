@@ -1,8 +1,17 @@
 // ForecastBridge front end.
 // Open the browser's DevTools console (Cmd+Option+J) to see errors and console.log output.
 
-const select = document.getElementById("location-select");
 const statusEl = document.getElementById("status");
+const searchInput = document.getElementById("place-search");
+const resultsList = document.getElementById("place-results");
+const featuredNav = document.getElementById("featured");
+const placeLabel = document.getElementById("place-label");
+
+// A place is { name, label, timezone, ... } as sent by /locations and /places.
+// `name` goes in API calls ("london" or "place-2654710"), `label` is shown to people.
+const DEFAULT_PLACE_NAME = "london";             // first visit, or if the saved place stops working
+const STORAGE_KEY = "forecastbridge:lastPlace";  // where the last viewed place is remembered
+let currentPlace = null;
 const nowButton = document.getElementById("now-button");
 let chart = null; // the Chart.js chart, kept so we can update it when the location changes
 
@@ -24,45 +33,208 @@ function showStatus(message, isError = false) {
   statusEl.classList.toggle("error", isError);
 }
 
-// 1. Fill the dropdown from GET /locations
-async function loadLocations() {
+// --- Remembering the last place ------------------------------------------------
+// localStorage can be unavailable (private browsing, blocked storage), so every access is wrapped.
+
+function savePlace(place) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(place));
+  } catch {
+    // Not remembering the place is fine; the page still works
+  }
+}
+
+function readSavedPlace() {
+  try {
+    const place = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (place?.name && place?.label && place?.timezone) return place;
+  } catch {
+    // Missing or unreadable: treat as a first visit
+  }
+  return null;
+}
+
+function forgetSavedPlace() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing to do
+  }
+}
+
+// --- Featured cities: quick buttons from GET /locations --------------------------
+
+async function loadFeatured() {
   const response = await fetch("/locations");
+  const places = await response.json();
 
-  const locations = await response.json();
+  places.forEach((place) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip";
+    button.dataset.name = place.name;
+    button.textContent = place.label;
+    button.addEventListener("click", () => selectPlace(place));
+    featuredNav.appendChild(button);
+  });
+  return places;
+}
 
-  locations.forEach((name) => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    select.appendChild(option);
+// Mark the current place's button as pressed (none, for a searched place)
+function highlightFeatured(name) {
+  featuredNav.querySelectorAll("button").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.name === name));
   });
 }
 
-// 2. Get the forecast for one location from GET /forecast?location=...
-async function loadForecast(name) {
+// --- Choosing a place ------------------------------------------------------------
+
+// Show a place's forecast; remember it if it loaded. Returns true if it loaded.
+async function selectPlace(place) {
+  currentPlace = place;
+  placeLabel.textContent = place.label;
+  highlightFeatured(place.name);
+
+  const loaded = await loadForecast(place);
+  if (loaded) savePlace(place);
+  return loaded;
+}
+
+// --- Searching any place: GET /places?query=... -----------------------------------
+
+const SEARCH_DELAY_MS = 300; // wait until typing pauses, rather than searching on every key
+let searchTimer = null;
+let latestSearch = 0;        // numbers each search, so a slow older answer can't overwrite a newer one
+
+function hideResults() {
+  resultsList.hidden = true;
+  resultsList.replaceChildren();
+  searchInput.setAttribute("aria-expanded", "false");
+}
+
+function showResults(places, emptyMessage) {
+  resultsList.replaceChildren();
+
+  if (places.length === 0) {
+    const item = document.createElement("li");
+    item.className = "place-results-empty";
+    item.textContent = emptyMessage;
+    resultsList.appendChild(item);
+  }
+
+  places.forEach((place) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = place.label;
+    button.addEventListener("click", () => {
+      searchInput.value = "";
+      hideResults();
+      selectPlace(place);
+    });
+    item.appendChild(button);
+    resultsList.appendChild(item);
+  });
+
+  resultsList.hidden = false;
+  searchInput.setAttribute("aria-expanded", "true");
+}
+
+async function searchPlaces() {
+  const query = searchInput.value.trim();
+  if (query.length < 2) {
+    hideResults();
+    return;
+  }
+
+  const searchNumber = ++latestSearch;
+  let places;
+  try {
+    const response = await fetch(`/places?query=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+    places = await response.json();
+  } catch {
+    if (searchNumber === latestSearch) showResults([], "Search isn't available right now");
+    return;
+  }
+
+  // The user kept typing while this search was in flight: a newer search owns the list
+  if (searchNumber !== latestSearch) return;
+  showResults(places, `No places found for "${query}"`);
+}
+
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(searchPlaces, SEARCH_DELAY_MS);
+});
+
+searchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    hideResults();
+  } else if (event.key === "Enter") {
+    // Enter picks the first suggestion, if there is one
+    resultsList.querySelector("button")?.click();
+  } else if (event.key === "ArrowDown") {
+    // Down arrow moves into the suggestions (then Tab/Shift+Tab or arrows move between them)
+    event.preventDefault();
+    resultsList.querySelector("button")?.focus();
+  }
+});
+
+resultsList.addEventListener("keydown", (event) => {
+  const buttons = [...resultsList.querySelectorAll("button")];
+  const index = buttons.indexOf(document.activeElement);
+  if (event.key === "ArrowDown" && index < buttons.length - 1) {
+    event.preventDefault();
+    buttons[index + 1].focus();
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    (index > 0 ? buttons[index - 1] : searchInput).focus();
+  } else if (event.key === "Escape") {
+    hideResults();
+    searchInput.focus();
+  }
+});
+
+// Clicking anywhere outside the search closes the suggestions
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".search")) hideResults();
+});
+
+// --- Forecast: GET /forecast?location=... -------------------------------------------
+
+let latestForecast = 0; // like latestSearch: switching place quickly mustn't show an older place's data
+
+// Load and show a place's forecast. Returns true if it loaded.
+async function loadForecast(place) {
   showStatus("Loading…");
+  const requestNumber = ++latestForecast;
 
   let response;
   try {
-    response = await fetch(`/forecast?location=${encodeURIComponent(name)}`);
+    response = await fetch(`/forecast?location=${encodeURIComponent(place.name)}`);
   } catch {
     // fetch only throws when the server can't be reached at all (e.g. uvicorn isn't running)
     showStatus("Can't reach the ForecastBridge server. Is it running?", true);
-    return;
+    return false;
   }
+  if (requestNumber !== latestForecast) return false; // another place was chosen meanwhile
 
   if (!response.ok) {
     const error = await response.json();
     showStatus(`Error: ${error.detail}`, true);
-    return;
+    return false;
   }
 
   const records = await response.json();
-  const nowIndex = findNowIndex(records);
+  if (requestNumber !== latestForecast) return false;
+
+  const nowIndex = findNowIndex(records, place.timezone);
   showNow(records, nowIndex);
   drawChart(records, nowIndex);
   showStatus("");
-  loadAdvice(name);
+  loadAdvice(place.name);
+  return true;
 }
 
 // An emoji for each kind of advice the API sends back
@@ -99,10 +271,10 @@ async function loadAdvice(name) {
   });
 }
 
-// The current hour in UK time, in the same format as the API: "2026-10-19T18:00"
-function currentHourKey() {
+// The current hour in the place's time zone, in the same format as the API: "2026-10-19T18:00"
+function currentHourKey(timeZone) {
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
+    timeZone,
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
   }).formatToParts(new Date());
   const part = (type) => parts.find((p) => p.type === type).value;
@@ -110,8 +282,9 @@ function currentHourKey() {
 }
 
 // Which record is "now"? The forecast starts at midnight, so it's usually not the first one.
-function findNowIndex(records) {
-  const index = records.findIndex((r) => r.time === currentHourKey());
+function findNowIndex(records, timeZone) {
+  const nowKey = currentHourKey(timeZone);
+  const index = records.findIndex((r) => r.time === nowKey);
   return index === -1 ? 0 : index; // fall back to the first hour if now isn't in the data
 }
 
@@ -129,7 +302,7 @@ function showNow(records, nowIndex) {
   document.getElementById("now-wind").textContent = `${now.wind_kph} km/h`;
 }
 
-// "2026-10-19T09:00" -> "Mon 09:00" (the API's times are already UK local time)
+// "2026-10-19T09:00" -> "Mon 09:00" (the API's times are already in the place's local time)
 function formatHour(time) {
   return new Date(time).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -295,7 +468,24 @@ document.getElementById("forecast-chart").addEventListener("touchend", () => {
   }, 1500);
 });
 
-// Start: load locations, then the forecast for the first one, and reload when the dropdown changes
+// Start: show the featured cities, then open the last viewed place (or London on a first visit)
 nowButton.addEventListener("click", flashNow);
-select.addEventListener("change", () => loadForecast(select.value));
-loadLocations().then(() => loadForecast(select.value));
+
+async function start() {
+  let featured = [];
+  try {
+    featured = await loadFeatured();
+  } catch {
+    showStatus("Can't reach the ForecastBridge server. Is it running?", true);
+    return;
+  }
+
+  const saved = readSavedPlace();
+  if (saved && (await selectPlace(saved))) return;
+  if (saved) forgetSavedPlace(); // the saved place no longer loads: fall back quietly
+
+  const fallback = featured.find((place) => place.name === DEFAULT_PLACE_NAME) ?? featured[0];
+  if (fallback) await selectPlace(fallback);
+}
+
+start();

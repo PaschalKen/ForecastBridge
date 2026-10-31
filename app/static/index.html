@@ -10,11 +10,20 @@
   <main>
     <header>
       <h1>ForecastBridge</h1>
-      <label>
-        Location
-        <select id="location-select"></select>
-      </label>
+      <!-- Search any place: suggestions come from GET /places?query=... -->
+      <div class="search">
+        <label for="place-search" class="visually-hidden">Search for a place</label>
+        <input id="place-search" type="search" placeholder="Search any place…" autocomplete="off"
+               role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-results">
+        <ul id="place-results" class="place-results" role="listbox" hidden></ul>
+      </div>
     </header>
+
+    <!-- Featured cities as quick buttons, from GET /locations -->
+    <nav id="featured" class="featured" aria-label="Featured cities"></nav>
+
+    <!-- The place being shown, e.g. "Brighton, England, United Kingdom" -->
+    <h2 id="place-label" class="place-label"></h2>
 
     <!-- Shown while loading, or when something goes wrong -->
     <p id="status" role="status"></p>

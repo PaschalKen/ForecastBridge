@@ -27,7 +27,8 @@ and serve it through an API.
 ```
 app/
   config.py    # settings, read from environment variables / .env
-  location.py  # Location dataclass, LOCATIONS registry, Location.get_location(name)
+  location.py  # Location (name, coords, label, timezone), featured LOCATIONS, place_id_from(name)
+  geocoding.py # GeocodingClient: search(query), get(place_id); searched places are named "place-<id>"
   forecast.py  # HourlyForecast dataclass (one hour of weather)
   weather.py   # WeatherClient: fetch_raw_forecast(location), get_forecast(location)
   advice.py    # pure rules: hourly records -> plain-language Advice (thresholds at the top)

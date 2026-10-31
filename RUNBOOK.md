@@ -95,7 +95,7 @@ change either function's runtime or architecture without changing the script too
 | `app/static/` (web page) | ✅ | |
 | `app/controllers/`, `app/main.py`, `app/lambda_api.py` | ✅ | |
 | `app/collector.py` | | ✅ |
-| `app/advice.py` | ✅ | |
+| `app/advice.py`, `app/geocoding.py` | ✅ | |
 | `app/weather.py`, `app/storage.py`, `app/location.py`, `app/forecast.py`, `app/config.py` | ✅ | ✅ |
 | A library version in `requirements.txt` | ✅ if it's in `api.zip` | ✅ if it's in `collector.zip` |
 
