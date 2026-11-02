@@ -43,73 +43,17 @@ header {
 
 h1 { margin: 0; font-size: 1.5rem; }
 
-/* Hidden on screen but still read by screen readers */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+label { display: flex; gap: 8px; align-items: center; color: var(--muted); }
 
-/* Search box, with its suggestions dropping down underneath */
-.search {
-  position: relative;
-  flex: 1 1 260px;
-  max-width: 420px;
-}
-
-.search input {
-  width: 100%;
+select {
   font: inherit;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--surface);
   color: var(--text);
+  text-transform: capitalize;
 }
-
-.place-results {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 10;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
-}
-
-.place-results button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border: none;
-  border-radius: 6px;
-}
-
-.place-results button:hover,
-.place-results button:focus { background: var(--bg); outline: none; }
-
-.place-results-empty { padding: 6px 14px; color: var(--muted); }
-
-/* Featured cities as small rounded buttons; the one being shown is filled in */
-.featured {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.chip { border-radius: 999px; padding: 4px 12px; font-size: 0.9rem; }
-.chip[aria-pressed="true"] { background: var(--text); color: var(--surface); border-color: var(--text); }
-
-.place-label { margin: 16px 0 0; font-size: 1.25rem; }
 
 #status { min-height: 1.5em; color: var(--muted); }
 #status.error { color: var(--error); }
@@ -192,3 +136,64 @@ button {
 
 button:hover:not(:disabled) { border-color: var(--muted); }
 button:disabled { opacity: 0.5; cursor: default; }
+
+/* --- Place search, next to the Location dropdown --- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Hidden on screen but still read by screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.search { position: relative; }
+
+.search input {
+  width: 220px;
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Suggestions drop down under the search box */
+.place-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+}
+
+.place-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+}
+
+.place-results button:hover,
+.place-results button:focus { background: var(--bg); outline: none; }
+
+.place-results-empty { padding: 6px 14px; color: var(--muted); }

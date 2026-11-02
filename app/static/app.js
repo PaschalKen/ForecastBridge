@@ -4,8 +4,7 @@
 const statusEl = document.getElementById("status");
 const searchInput = document.getElementById("place-search");
 const resultsList = document.getElementById("place-results");
-const featuredNav = document.getElementById("featured");
-const placeLabel = document.getElementById("place-label");
+const select = document.getElementById("location-select");
 
 // A place is { name, label, timezone, ... } as sent by /locations and /places.
 // `name` goes in API calls ("london" or "place-2654710"), `label` is shown to people.
@@ -62,38 +61,42 @@ function forgetSavedPlace() {
   }
 }
 
-// --- Featured cities: quick buttons from GET /locations --------------------------
+// --- The Location dropdown: featured cities from GET /locations, plus a searched place -----
+
+const placesByName = {}; // every place the dropdown can show, by name, so a choice can be looked up
 
 async function loadFeatured() {
   const response = await fetch("/locations");
   const places = await response.json();
 
   places.forEach((place) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "chip";
-    button.dataset.name = place.name;
-    button.textContent = place.label;
-    button.addEventListener("click", () => selectPlace(place));
-    featuredNav.appendChild(button);
+    placesByName[place.name] = place;
+    select.add(new Option(place.label, place.name));
   });
   return places;
 }
 
-// Mark the current place's button as pressed (none, for a searched place)
-function highlightFeatured(name) {
-  featuredNav.querySelectorAll("button").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.name === name));
-  });
+// Make the dropdown show this place. A searched place gets its own option at the top
+// (replacing any previous searched place), so the dropdown always shows what's on screen.
+function showInDropdown(place) {
+  placesByName[place.name] = place;
+  if (![...select.options].some((option) => option.value === place.name)) {
+    select.querySelector("option[data-searched]")?.remove();
+    const option = new Option(place.label, place.name);
+    option.dataset.searched = "true";
+    select.add(option, 0);
+  }
+  select.value = place.name;
 }
+
+select.addEventListener("change", () => selectPlace(placesByName[select.value]));
 
 // --- Choosing a place ------------------------------------------------------------
 
 // Show a place's forecast; remember it if it loaded. Returns true if it loaded.
 async function selectPlace(place) {
   currentPlace = place;
-  placeLabel.textContent = place.label;
-  highlightFeatured(place.name);
+  showInDropdown(place);
 
   const loaded = await loadForecast(place);
   if (loaded) savePlace(place);

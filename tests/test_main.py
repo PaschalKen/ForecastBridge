@@ -207,3 +207,16 @@ def test_advice_when_fetch_fails_returns_503():
     response = client.get("/advice", params={"location": "portsmouth"})
 
     assert response.status_code == 503
+
+
+def test_front_end_files_tell_browsers_to_check_for_updates():
+    for path in ["/", "/static/app.js", "/static/style.css"]:
+        response = client.get(path)
+
+        assert response.headers["cache-control"] == "no-cache", path
+
+
+def test_api_responses_are_not_affected_by_the_front_end_cache_rule():
+    response = client.get("/health")
+
+    assert "cache-control" not in response.headers
