@@ -1,14 +1,15 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 import requests
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.advice import Advice, build_advice, find_now_index
 from app.forecast import HourlyForecast
 from app.geocoding import GeocodingClient, get_geocoding
+from app.history import MAX_HOURS_BEFORE, HistoryPoint, forecast_history
 from app.location import LOCATIONS, Location, place_id_from
 from app.storage import SnapshotStore
 from app.weather import WeatherClient
@@ -21,6 +22,10 @@ class LocationNotFoundError(Exception):
 
 
 class ProviderUnavailableError(Exception):
+    pass
+
+
+class HistoryUnavailableError(Exception):
     pass
 
 
@@ -45,6 +50,27 @@ class ForecastController:
         records = WeatherClient.format_forecast(raw)
         now_index = find_now_index(records, raw.get("utc_offset_seconds", 0))
         return build_advice(records, now_index)
+
+    def get_history(self, name: str, target_time: str) -> list[HistoryPoint]:
+        """How the forecast for one hour (local time, e.g. "2026-11-03T15:00") changed across
+        the snapshots saved in S3."""
+        location = self._resolve(name)
+
+        # Snapshot keys are UTC hours but target_time is local, so search a little wider than
+        # 48 hours (time zones are at most 14 hours from UTC); forecast_history then keeps only
+        # the snapshots that really are 0 to 48 hours before the target.
+        target = datetime.fromisoformat(target_time).replace(tzinfo=timezone.utc)
+        start = target - timedelta(hours=MAX_HOURS_BEFORE + 14)
+        end = target + timedelta(hours=14)
+
+        try:
+            snapshots = self.store.snapshots_between(location.name, start, end)
+        except (BotoCoreError, ClientError) as error:
+            # Unlike the cache, history only exists in S3, so here a storage problem is an error
+            logger.warning("Could not read forecast history for %s", location.name, exc_info=True)
+            raise HistoryUnavailableError() from error
+
+        return forecast_history(snapshots, target_time)
 
     def _get_raw(self, name: str) -> dict:
         """This hour's raw forecast for a location: from the store if saved, otherwise from
@@ -118,6 +144,8 @@ def to_http_error(location: str, error: Exception) -> HTTPException:
             status_code=404,
             detail=f"Location '{location.lower()}' not found. Available: {', '.join(LOCATIONS)}",
         )
+    if isinstance(error, HistoryUnavailableError):
+        return HTTPException(status_code=503, detail="Forecast history is unavailable. Try again later.")
     return HTTPException(status_code=503, detail="Weather provider is unavailable. Try again later.")
 
 
@@ -136,4 +164,18 @@ def get_advice(location: str, controller: ForecastController = Depends(get_contr
     try:
         return controller.get_advice(location)
     except (LocationNotFoundError, ProviderUnavailableError) as error:
+        raise to_http_error(location, error)
+
+
+@router.get("/history")
+def get_history(
+    location: str,
+    time: str = Query(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:00$", examples=["2026-11-03T15:00"]),
+    controller: ForecastController = Depends(get_controller),
+) -> list[HistoryPoint]:
+    """How the forecast for one hour changed: what each saved hourly snapshot (up to 48 hours
+    before) said about it, oldest first. `time` is in the place's local time, as /forecast shows it."""
+    try:
+        return controller.get_history(location, time)
+    except (LocationNotFoundError, ProviderUnavailableError, HistoryUnavailableError) as error:
         raise to_http_error(location, error)

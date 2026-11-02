@@ -237,6 +237,8 @@ async function loadForecast(place) {
   drawChart(records, nowIndex);
   showStatus("");
   loadAdvice(place.name);
+  currentRecords = records;
+  loadHistory(place, records[nowIndex].time); // start with the current hour
   return true;
 }
 
@@ -388,6 +390,13 @@ function drawChart(records, nowIndex) {
         layout: { padding: { top: 20 } }, // room above the chart for the "Now" label
         // Hovering anywhere in an hour's column shows both temperature and rain for that hour
         interaction: { mode: "index", intersect: false },
+        // Clicking an hour shows how its forecast changed, in the panel below
+        onClick: (_event, elements) => {
+          const index = elements[0]?.index;
+          if (index !== undefined && currentPlace && currentRecords[index]) {
+            loadHistory(currentPlace, currentRecords[index].time);
+          }
+        },
         scales: {
           x: { title: { display: true, text: "Time" } },
           temp: { position: "left", title: { display: true, text: "Temperature (°C)" } },
@@ -491,4 +500,113 @@ async function start() {
   if (fallback) await selectPlace(fallback);
 }
 
+
+// --- How the forecast changed: GET /history?location=...&time=... -----------------------
+
+const historySummary = document.getElementById("history-summary");
+let currentRecords = []; // the 48 hours on the main chart, so a click can find its time
+let historyChart = null;
+let latestHistory = 0;   // like latestSearch: a slow older answer mustn't replace a newer one
+
+async function loadHistory(place, time) {
+  const requestNumber = ++latestHistory;
+  historySummary.textContent = `Loading the forecast history for ${formatHour(time)}…`;
+
+  let points;
+  try {
+    const response = await fetch(
+      `/history?location=${encodeURIComponent(place.name)}&time=${encodeURIComponent(time)}`
+    );
+    if (!response.ok) throw new Error(`History failed: ${response.status}`);
+    points = await response.json();
+  } catch {
+    if (requestNumber === latestHistory) {
+      historySummary.textContent = "The forecast history isn't available right now.";
+      drawHistory([]);
+    }
+    return;
+  }
+  if (requestNumber !== latestHistory) return; // another hour or place was chosen meanwhile
+
+  historySummary.textContent = describeHistory(points, time);
+  drawHistory(points);
+}
+
+// One sentence comparing the earliest saved forecast for the hour with the latest
+function describeHistory(points, time) {
+  const hour = formatHour(time);
+  const tip = "Click any hour on the chart above to see its history.";
+  if (points.length === 0) {
+    return `No saved forecasts for ${hour} yet: history builds up as the hourly snapshots are saved. ${tip}`;
+  }
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const describe = (p) => `${p.temperature_c}°C, ${p.rain_chance_percent}% rain`;
+  const when = (p) => (p.hours_before === 0 ? "during that hour" : `${p.hours_before}h before`);
+
+  if (points.length === 1) {
+    return `${hour}: forecast ${when(first)} as ${describe(first)}. ${tip}`;
+  }
+  return `${hour}: ${points.length} saved forecasts. ${when(first)} it said ${describe(first)}; ` +
+    `${when(last)} it said ${describe(last)}. ${tip}`;
+}
+
+// Temperature line and rain bars, oldest forecast on the left, like the main chart
+function drawHistory(points) {
+  const labels = points.map((p) => (p.hours_before === 0 ? "During" : `${p.hours_before}h before`));
+  const temperatures = points.map((p) => p.temperature_c);
+  const rainChances = points.map((p) => p.rain_chance_percent);
+
+  if (historyChart) {
+    historyChart.data.labels = labels;
+    historyChart.data.datasets[0].data = temperatures;
+    historyChart.data.datasets[1].data = rainChances;
+    historyChart.update();
+    return;
+  }
+
+  historyChart = new Chart(document.getElementById("history-chart").getContext("2d"), {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: "line",
+          label: "Forecast temperature (°C)",
+          data: temperatures,
+          yAxisID: "temp",
+          borderColor: "rgba(75, 192, 192, 1)",
+          backgroundColor: "rgba(75, 192, 192, 0.2)",
+          fill: true,
+        },
+        {
+          type: "bar",
+          label: "Forecast chance of rain (%)",
+          data: rainChances,
+          yAxisID: "rain",
+          backgroundColor: "rgba(54, 120, 220, 0.35)",
+          maxBarThickness: 14,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { title: { display: true, text: "When the forecast was made" } },
+        temp: { position: "left", title: { display: true, text: "Temperature (°C)" } },
+        rain: {
+          position: "right",
+          min: 0,
+          max: 100,
+          title: { display: true, text: "Chance of rain (%)" },
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
+  });
+}
+
+// Everything above is defined; now open the page
 start();

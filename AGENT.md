@@ -28,6 +28,7 @@ and serve it through an API.
 app/
   config.py    # settings, read from environment variables / .env
   location.py  # Location (name, coords, label, timezone), featured LOCATIONS, place_id_from(name)
+  history.py   # pure: snapshots -> HistoryPoint list (how one hour's forecast changed)
   geocoding.py # GeocodingClient: search(query), get(place_id); searched places are named "place-<id>"
   forecast.py  # HourlyForecast dataclass (one hour of weather)
   weather.py   # WeatherClient: fetch_raw_forecast(location), get_forecast(location)

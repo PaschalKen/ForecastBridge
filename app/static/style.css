@@ -197,3 +197,18 @@ button:disabled { opacity: 0.5; cursor: default; }
 .place-results button:focus { background: var(--bg); outline: none; }
 
 .place-results-empty { padding: 6px 14px; color: var(--muted); }
+
+/* --- How the forecast changed: under the 48-hour chart, same look --- */
+
+.history-panel { margin-top: 24px; }
+
+.history-summary { margin: 0 0 8px; color: var(--muted); }
+
+/* Chart.js sizes the history chart to this element */
+.history-inner {
+  position: relative;
+  height: 260px;
+}
+
+/* The 48-hour chart's hours can be clicked to show their history */
+#forecast-chart { cursor: pointer; }
