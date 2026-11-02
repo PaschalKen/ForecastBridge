@@ -83,9 +83,9 @@ such as `place-2654710` for Brighton, UK. Times are in the place's own time zone
   change.
 - **Least-privilege permissions.** Each Lambda function has its own IAM role. The collector
   can only upload to `raw/`. The API can read and write `raw/`. The scheduler can only invoke
-  the collector. GitHub's deploy role can only update the two functions' code.
-- **Automatic, keyless deploys.** Merging to `master` runs the tests, then deploys both
-  functions through GitHub Actions. It logs in to AWS with OIDC, so no AWS keys are stored in GitHub.
+  the collector. GitHub's deploy user can only update the two functions' code.
+- **Automatic deploys.** Merging to `master` runs the tests, then deploys both functions through
+  GitHub Actions, using an encrypted, deploy-only AWS key.
 - **Classes with injected dependencies.** `WeatherClient`, `SnapshotStore`, `Collector` and
   `ForecastController` receive what they depend on, so tests can pass in fakes instead of
   patching.

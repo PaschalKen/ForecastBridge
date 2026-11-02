@@ -93,8 +93,9 @@ date when anything on AWS changes.
 - Tests must not depend on the internet; use small hard-coded sample data.
 - Tests must also pass without a `.env` file or AWS credentials: GitHub Actions
   (`.github/workflows/tests.yml`) runs them on a clean machine for every push and pull request.
-- Merging to `master` deploys automatically (`.github/workflows/deploy.yml`, OIDC role
-  `forecastbridge-github-deploy`). Never commit AWS keys or add them as GitHub secrets.
+- Merging to `master` deploys automatically (`.github/workflows/deploy.yml`) as the IAM user
+  `forecastbridge-github-deploy`, whose key is in GitHub secrets. Never commit AWS keys, and never
+  widen that user's permissions beyond updating the two functions' code.
 - Pin versions in `requirements.txt`, and add new packages there when they are installed.
 - Settings go in `app/config.py`, read with `os.getenv` and a sensible default. Add new ones to `.env.example`.
 - Never commit secrets or AWS credentials.
