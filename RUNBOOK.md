@@ -61,7 +61,22 @@ Running the app locally reads and writes the **real** S3 bucket (the tests never
 
 ## 3. Deploy a change to AWS
 
-There is no automatic deployment. A change goes live in four steps.
+### Automatic (normal way)
+
+Merging a pull request into `master` deploys it. The **Deploy** workflow
+(`.github/workflows/deploy.yml`) runs the tests, builds both zips, updates both Lambda functions,
+then checks the live site answers. If any test fails, nothing is deployed. Follow it in the
+repo's **Actions** tab; a red cross means the live site was not changed (or, if only the final
+check failed, that it was changed but isn't answering: look at that step's log).
+
+To redeploy without a code change: **Actions**, then **Deploy**, then **Run workflow**.
+
+GitHub logs in to AWS with OIDC (no stored keys) and assumes the IAM role
+`forecastbridge-github-deploy`, which can only update the two functions' code.
+
+### By hand (fallback)
+
+If GitHub Actions is unavailable, a change goes live in four steps.
 
 ### Step 1: Test locally
 
@@ -216,6 +231,8 @@ All in eu-north-1, account `108248327537`.
 | Function URL | https://4hgo4skmrmq4avm52lrgj23lzu0gatfn.lambda-url.eu-north-1.on.aws/ (public, auth NONE) |
 | IAM role `forecastbridge-api-role` | `AWSLambdaBasicExecutionRole` + inline `forecastbridge-api-s3-readwrite`: Get/PutObject on `raw/*`, ListBucket on prefix `raw/*` |
 | Lambda `forecastbridge-collector` | Python 3.12, arm64, 256 MB, 1 min timeout. Handler `app.collector.handler`. Env `S3_BUCKET` |
+| IAM OIDC provider `token.actions.githubusercontent.com` | Lets GitHub Actions log in to AWS without stored keys (audience `sts.amazonaws.com`) |
+| IAM role `forecastbridge-github-deploy` | Assumable only by GitHub Actions runs on `master` of `PaschalKen/ForecastBridge`. Inline `forecastbridge-github-deploy-lambda`: UpdateFunctionCode, GetFunction, GetFunctionConfiguration on the two functions only |
 | IAM role `forecastbridge-collector-role` | `AWSLambdaBasicExecutionRole` + inline `forecastbridge-collector-s3-write`: PutObject on `raw/*` only |
 | EventBridge Scheduler `forecastbridge-hourly` | `cron(5 * * * ? *)`, UTC, 3 retries, max event age 1 hour |
 | CloudWatch alarm `forecastbridge-collector-errors` | Collector `Errors` > 0 in an hour, emails via SNS topic `forecastbridge-alerts` |
