@@ -78,6 +78,10 @@ Don't deploy if anything fails. GitHub also runs the tests on every push and pul
 ./scripts/build_lambda.sh
 ```
 
+It must end with two lines, `Built build/collector.zip (...)` and `Built build/api.zip (...)`.
+If either is missing, the build stopped partway: run it again (with the virtual environment
+active) before uploading anything, or the functions keep running the old code.
+
 This creates two files:
 
 | File | Upload to | Contains |
@@ -128,8 +132,11 @@ aws lambda get-function-configuration --function-name forecastbridge-api \
 ls -l build/api.zip
 ```
 
-Browsers may keep an old copy of `app.js`: after a front-end change, hard refresh the live site
-(Cmd + Shift + R).
+Browser caching: the server sends `Cache-Control: no-cache` for the page and `/static/` files,
+so browsers check for a new version on each visit. Copies saved *before* that header existed
+(before 2 Nov 2026) ignore it, which is why `index.html` loads `style.css?v=2` and `app.js?v=2`:
+a new `?v=` number is a new address, so no old copy can be used. If a front-end change ever looks
+stale for visitors, bump that number for both files and redeploy.
 
 ### Step 4: Check it
 

@@ -4,7 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ForecastBridge</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <!-- ?v=N gives the file a new address, so browsers can't reuse an old saved copy.
+       Bump the number for both files when you change either and older copies exist. -->
+  <link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
   <main>
@@ -59,6 +61,6 @@
 
   <!-- Chart.js from a CDN (pinned version), then our own script -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=2"></script>
 </body>
 </html>
