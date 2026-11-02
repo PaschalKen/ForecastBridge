@@ -1,5 +1,6 @@
 import json
-from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 import boto3
 
@@ -48,3 +49,35 @@ class SnapshotStore:
 
         with response["Body"] as body:
             return json.loads(body.read())
+
+    def snapshots_between(self, location: str, start: datetime, end: datetime) -> list[tuple[datetime, dict]]:
+        """Every snapshot saved from `start` to `end` (UTC hours, inclusive), oldest first,
+        as (hour it was saved, raw forecast) pairs."""
+        times = self._snapshot_times(location, start, end)
+
+        # Load several at once: each is a separate S3 request, and waiting for them one by one
+        # would take seconds. boto3 clients are safe to share between threads.
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            loaded = list(pool.map(lambda when: (when, self.load(location, when)), times))
+
+        return [(when, raw) for when, raw in loaded if raw is not None]
+
+    def _snapshot_times(self, location: str, start: datetime, end: datetime) -> list[datetime]:
+        """The hours (UTC) that have a saved snapshot between start and end, by listing each
+        day's "folder" in S3 (e.g. raw/london/2026-11-02/) rather than guessing keys."""
+        paginator = self.s3_client.get_paginator("list_objects_v2")
+        times = []
+
+        day = start.date()
+        while day <= end.date():
+            prefix = f"raw/{location}/{day:%Y-%m-%d}/"
+            for key in paginator.paginate(Bucket=self.bucket, Prefix=prefix).search("Contents[].Key"):
+                hour = (key or "").rsplit("/", 1)[-1].removesuffix(".json")
+                if not hour.isdigit():  # empty day, or an old-style key such as 18-11-17.json
+                    continue
+                when = datetime(day.year, day.month, day.day, int(hour), tzinfo=timezone.utc)
+                if start <= when <= end:
+                    times.append(when)
+            day += timedelta(days=1)
+
+        return sorted(times)

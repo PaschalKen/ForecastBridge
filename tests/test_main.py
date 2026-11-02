@@ -44,6 +44,10 @@ class FakeStore:
         self.snapshots[location_name] = data
         return f"raw/{location_name}/test.json"
 
+    def snapshots_between(self, location_name, start, end):
+        # History tests put (saved hour, raw) pairs in self.history
+        return [(when, raw) for when, raw in getattr(self, "history", []) if start <= when <= end]
+
 
 class BrokenStore:
     """Behaves as if S3 is unreachable."""
@@ -52,6 +56,9 @@ class BrokenStore:
         raise EndpointConnectionError(endpoint_url="https://s3.example")
 
     def save(self, location_name, data, when=None):
+        raise EndpointConnectionError(endpoint_url="https://s3.example")
+
+    def snapshots_between(self, location_name, start, end):
         raise EndpointConnectionError(endpoint_url="https://s3.example")
 
 
@@ -220,3 +227,58 @@ def test_api_responses_are_not_affected_by_the_front_end_cache_rule():
     response = client.get("/health")
 
     assert "cache-control" not in response.headers
+
+
+# --- GET /history ----------------------------------------------------------------
+
+def test_history_returns_what_each_snapshot_forecast():
+    from datetime import datetime, timezone
+
+    store = FakeStore()
+    # SAMPLE_DATA covers 2026-10-17 00:00 and 01:00 (offset 0); saved 3 hours before 01:00
+    store.history = [(datetime(2026, 10, 16, 22, tzinfo=timezone.utc), SAMPLE_DATA)]
+    use(FakeWeatherClient(), store)
+
+    response = client.get("/history", params={"location": "portsmouth", "time": "2026-10-17T01:00"})
+
+    assert response.status_code == 200
+    assert response.json() == [{
+        "forecast_made": "2026-10-16T22:00Z",
+        "hours_before": 3,
+        "temperature_c": 11.9,
+        "rain_chance_percent": 35,
+        "wind_kph": 14.8,
+    }]
+
+
+def test_history_with_no_snapshots_returns_empty_list():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/history", params={"location": "london", "time": "2026-10-17T01:00"})
+
+    assert response.json() == []
+
+
+def test_history_rejects_a_badly_formatted_time():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/history", params={"location": "london", "time": "tomorrow"})
+
+    assert response.status_code == 422
+
+
+def test_history_for_unknown_location_returns_404():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/history", params={"location": "paris", "time": "2026-10-17T01:00"})
+
+    assert response.status_code == 404
+
+
+def test_history_returns_503_when_storage_is_down():
+    # The cache can quietly skip a broken store, but history only exists in storage
+    use(FakeWeatherClient(), BrokenStore())
+
+    response = client.get("/history", params={"location": "london", "time": "2026-10-17T01:00"})
+
+    assert response.status_code == 503

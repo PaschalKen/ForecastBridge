@@ -18,6 +18,8 @@ an API, tests, a scheduled data pipeline, cloud storage, permissions and monitor
 - **Web page:** choose a place to see the current hour's temperature, chance of rain and wind,
   and a 48-hour chart of temperature and rain. A "Show now" button highlights the current
   hour, and on phones the chart scrolls sideways.
+- **Forecast history:** click any hour on the chart to see how its forecast changed across the
+  hourly snapshots in S3, e.g. "36h before it said 11.4°C, 0% rain; during that hour 10.9°C, 14%".
 - **Plain-language advice** for the next 12 hours, such as "Rain likely from 3pm (80%)",
   "Coldest at 6am: 4°C" and "Take a jacket", worked out from the forecast with tested rules.
 - **REST API** with interactive docs at `/docs`.
@@ -60,6 +62,7 @@ CloudWatch: logs, plus an alarm that emails (SNS) if a collector run fails
 |----------|---------|
 | `GET /forecast?location=london` | 48 hourly records for today and tomorrow. 404 for an unknown city, 503 if Open-Meteo is unavailable |
 | `GET /advice?location=london` | Plain-language advice for the next 12 hours, e.g. `{"kind": "rain", "message": "Rain likely from 3pm (80%)"}` |
+| `GET /history?location=london&time=2026-11-03T15:00` | What each saved hourly snapshot (up to 48 hours before) forecast for that hour, oldest first |
 | `GET /places?query=brighton` | Places matching a name, each with a `name` to use as `location`, a `label` and a `timezone` |
 | `GET /locations` | The featured cities, in the same format |
 | `GET /health` | `{"status": "ok"}` |
@@ -102,7 +105,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env              # set S3_BUCKET and AWS_PROFILE to enable caching
 uvicorn app.main:app --reload     # http://127.0.0.1:8000
-pytest                            # 73 tests
+pytest                            # 89 tests
 ```
 
 Without AWS credentials the app still works; it just doesn't cache.
@@ -120,6 +123,7 @@ app/
   weather.py         WeatherClient: fetches from Open-Meteo, formats hourly records
   geocoding.py       GeocodingClient: searches places and looks them up by id
   advice.py          Rules that turn hourly records into plain-language advice
+  history.py         How the forecast for one hour changed across saved snapshots
   storage.py         SnapshotStore: saves and loads snapshots in S3
   collector.py       Collector and its Lambda entry point (hourly job)
   location.py        Location and the featured cities
@@ -139,7 +143,7 @@ REQUIREMENTS.md      Feature list and status
 ## Possible next steps
 
 - Compare several cities on one chart
-- Measure forecast accuracy from the stored hourly history
+- Measure forecast accuracy against recorded weather, using the stored history
 
 The full list is in [REQUIREMENTS.md](REQUIREMENTS.md#6-future-ideas).
 
