@@ -71,8 +71,17 @@ check failed, that it was changed but isn't answering: look at that step's log).
 
 To redeploy without a code change: **Actions**, then **Deploy**, then **Run workflow**.
 
-GitHub logs in to AWS with OIDC (no stored keys) and assumes the IAM role
-`forecastbridge-github-deploy`, which can only update the two functions' code.
+GitHub logs in to AWS as the IAM user `forecastbridge-github-deploy`, whose access key is stored
+as two encrypted repository secrets (**Settings**, **Secrets and variables**, **Actions**):
+`AWS_DEPLOY_ACCESS_KEY_ID` and `AWS_DEPLOY_SECRET_ACCESS_KEY`. That user can only upload code to
+the two functions.
+
+- **Rotate the key** every few months: in IAM, create a second access key for the user, update
+  both secrets, run the Deploy workflow by hand to check it works, then delete the old key.
+- **If the key may have leaked:** delete it in IAM straight away (deploys stop until a new key is
+  added), check the functions' **Last modified** time in Lambda, and redeploy from `master`.
+- Keyless login (OIDC) would be safer, but this account's Free plan blocks identity providers
+  (organization rule `p-5dj032io`). After upgrading, switch to OIDC and delete this user.
 
 ### By hand (fallback)
 
@@ -231,8 +240,7 @@ All in eu-north-1, account `108248327537`.
 | Function URL | https://4hgo4skmrmq4avm52lrgj23lzu0gatfn.lambda-url.eu-north-1.on.aws/ (public, auth NONE) |
 | IAM role `forecastbridge-api-role` | `AWSLambdaBasicExecutionRole` + inline `forecastbridge-api-s3-readwrite`: Get/PutObject on `raw/*`, ListBucket on prefix `raw/*` |
 | Lambda `forecastbridge-collector` | Python 3.12, arm64, 256 MB, 1 min timeout. Handler `app.collector.handler`. Env `S3_BUCKET` |
-| IAM OIDC provider `token.actions.githubusercontent.com` | Lets GitHub Actions log in to AWS without stored keys (audience `sts.amazonaws.com`) |
-| IAM role `forecastbridge-github-deploy` | Assumable only by GitHub Actions runs on `master` of `PaschalKen/ForecastBridge`. Inline `forecastbridge-github-deploy-lambda`: UpdateFunctionCode, GetFunction, GetFunctionConfiguration on the two functions only |
+| IAM user `forecastbridge-github-deploy` | Used only by the GitHub Deploy workflow (no console access). Inline `forecastbridge-github-deploy-lambda`: UpdateFunctionCode, GetFunction, GetFunctionConfiguration on the two functions only |
 | IAM role `forecastbridge-collector-role` | `AWSLambdaBasicExecutionRole` + inline `forecastbridge-collector-s3-write`: PutObject on `raw/*` only |
 | EventBridge Scheduler `forecastbridge-hourly` | `cron(5 * * * ? *)`, UTC, 3 retries, max event age 1 hour |
 | CloudWatch alarm `forecastbridge-collector-errors` | Collector `Errors` > 0 in an hour, emails via SNS topic `forecastbridge-alerts` |

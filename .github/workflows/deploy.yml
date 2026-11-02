@@ -2,8 +2,10 @@
 # Tests run first; if any fail, nothing is deployed. Can also be started by hand from the
 # Actions tab ("Run workflow").
 #
-# AWS access uses OIDC: GitHub gives each run a short-lived signed token, and AWS lets it
-# assume the forecastbridge-github-deploy role for that run only. No AWS keys are stored in GitHub.
+# AWS access: the access key of the IAM user forecastbridge-github-deploy, stored as two
+# encrypted repository secrets (AWS_DEPLOY_ACCESS_KEY_ID, AWS_DEPLOY_SECRET_ACCESS_KEY).
+# That user can only upload code to the two functions. (Keyless OIDC login would be better, but
+# this account's Free plan blocks it; see RUNBOOK.md.)
 name: Deploy
 
 on:
@@ -22,7 +24,6 @@ concurrency:
 
 env:
   AWS_REGION: eu-north-1
-  AWS_DEPLOY_ROLE: arn:aws:iam::108248327537:role/forecastbridge-github-deploy
   LIVE_URL: https://4hgo4skmrmq4avm52lrgj23lzu0gatfn.lambda-url.eu-north-1.on.aws
 
 jobs:
@@ -49,7 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # lets this job ask GitHub for the OIDC token that AWS checks
 
     steps:
       - name: Check out the code
@@ -63,10 +63,11 @@ jobs:
       - name: Build both Lambda zips
         run: bash scripts/build_lambda.sh
 
-      - name: Log in to AWS (OIDC, no stored keys)
+      - name: Log in to AWS (deploy-only access key from repository secrets)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_DEPLOY_ROLE }}
+          aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy the API (web page + /forecast, /advice, /places)
