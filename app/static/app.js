@@ -11,6 +11,32 @@ const select = document.getElementById("location-select");
 const DEFAULT_PLACE_NAME = "london";             // first visit, or if the saved place stops working
 const STORAGE_KEY = "forecastbridge:lastPlace";  // where the last viewed place is remembered
 let currentPlace = null;
+
+// --- Units: °C and km/h, or °F and mph. The API always sends metric; the page converts. ---
+const unitsSelect = document.getElementById("units-select");
+const UNITS_KEY = "forecastbridge:units";
+let units = "metric";
+try {
+  if (localStorage.getItem(UNITS_KEY) === "imperial") units = "imperial";
+} catch {
+  // Storage blocked: use metric
+}
+unitsSelect.value = units;
+
+// Temperature in the chosen units, rounded to 1 decimal place, e.g. 12.4 or 54.3
+function toTemp(celsius) {
+  if (celsius == null) return null;
+  return units === "imperial" ? Math.round((celsius * 9 / 5 + 32) * 10) / 10 : celsius;
+}
+
+// Wind speed in the chosen units, e.g. 15.2 or 9.4
+function toSpeed(kph) {
+  if (kph == null) return null;
+  return units === "imperial" ? Math.round((kph / 1.609344) * 10) / 10 : kph;
+}
+
+const tempUnit = () => (units === "imperial" ? "°F" : "°C");
+const speedUnit = () => (units === "imperial" ? "mph" : "km/h");
 const nowButton = document.getElementById("now-button");
 let chart = null; // the Chart.js chart, kept so we can update it when the location changes
 
@@ -261,7 +287,7 @@ async function loadAdvice(name) {
 
   let advice;
   try {
-    const response = await fetch(`/advice?location=${encodeURIComponent(name)}`);
+    const response = await fetch(`/advice?location=${encodeURIComponent(name)}&units=${units}`);
     if (!response.ok) return;
     advice = await response.json();
   } catch {
@@ -302,9 +328,24 @@ function showNow(records, nowIndex) {
 
   const now = records[nowIndex];
   document.getElementById("now-time").textContent = formatHour(now.time);
-  document.getElementById("now-temp").textContent = `${now.temperature_c} °C`;
+  document.getElementById("now-temp").textContent = `${toTemp(now.temperature_c)} ${tempUnit()}`;
   document.getElementById("now-rain").textContent = `${now.rain_chance_percent} %`;
-  document.getElementById("now-wind").textContent = `${now.wind_kph} km/h`;
+  document.getElementById("now-wind").textContent = `${toSpeed(now.wind_kph)} ${speedUnit()}`;
+  // Older saved snapshots have no feels-like or UV: show a dash rather than "null"
+  // Under the temperature; left empty for older saved snapshots that have no feels-like value
+  document.getElementById("now-feels").textContent =
+    now.feels_like_c == null ? "" : `Feels like ${toTemp(now.feels_like_c)} ${tempUnit()}`;
+  document.getElementById("now-uv").textContent =
+    now.uv_index == null ? "–" : `${now.uv_index} ${uvLevel(now.uv_index)}`;
+}
+
+// The WHO's words for UV index levels
+function uvLevel(index) {
+  if (index < 3) return "Low";
+  if (index < 6) return "Moderate";
+  if (index < 8) return "High";
+  if (index < 11) return "Very high";
+  return "Extreme";
 }
 
 // "2026-10-19T09:00" -> "Mon 09:00" (the API's times are already in the place's local time)
@@ -348,7 +389,7 @@ const nowLinePlugin = {
 function drawChart(records, nowIndex) {
   const ctx = document.getElementById("forecast-chart").getContext("2d");
   const labels = records.map((r) => formatHour(r.time));
-  const temperatures = records.map((r) => r.temperature_c);
+  const temperatures = records.map((r) => toTemp(r.temperature_c));
   const rainChances = records.map((r) => r.rain_chance_percent);
 
   nowHighlight.index = nowIndex;
@@ -358,6 +399,8 @@ function drawChart(records, nowIndex) {
     chart.data.labels = labels;
     chart.data.datasets[0].data = temperatures;
     chart.data.datasets[1].data = rainChances;
+    chart.data.datasets[0].label = `Temperature (${tempUnit()})`;
+    chart.options.scales.temp.title.text = `Temperature (${tempUnit()})`;
     chart.update();
   } else {
     chart = new Chart(ctx, {
@@ -367,7 +410,7 @@ function drawChart(records, nowIndex) {
         datasets: [
           {
             type: "line",
-            label: "Temperature (°C)",
+            label: `Temperature (${tempUnit()})`,
             data: temperatures,
             yAxisID: "temp",
             borderColor: "rgba(75, 192, 192, 1)",
@@ -399,7 +442,7 @@ function drawChart(records, nowIndex) {
         },
         scales: {
           x: { title: { display: true, text: "Time" } },
-          temp: { position: "left", title: { display: true, text: "Temperature (°C)" } },
+          temp: { position: "left", title: { display: true, text: `Temperature (${tempUnit()})` } },
           rain: {
             position: "right",
             min: 0,
@@ -506,7 +549,8 @@ async function start() {
 const historySummary = document.getElementById("history-summary");
 let currentRecords = []; // the 48 hours on the main chart, so a click can find its time
 let historyChart = null;
-let latestHistory = 0;   // like latestSearch: a slow older answer mustn't replace a newer one
+let latestHistory = 0;
+let lastHistory = null;  // the history on screen, so changing units can redraw it   // like latestSearch: a slow older answer mustn't replace a newer one
 
 async function loadHistory(place, time) {
   const requestNumber = ++latestHistory;
@@ -528,6 +572,7 @@ async function loadHistory(place, time) {
   }
   if (requestNumber !== latestHistory) return; // another hour or place was chosen meanwhile
 
+  lastHistory = { points, time };
   historySummary.textContent = describeHistory(points, time);
   drawHistory(points);
 }
@@ -542,7 +587,7 @@ function describeHistory(points, time) {
 
   const first = points[0];
   const last = points[points.length - 1];
-  const describe = (p) => `${p.temperature_c}°C, ${p.rain_chance_percent}% rain`;
+  const describe = (p) => `${toTemp(p.temperature_c)}${tempUnit()}, ${p.rain_chance_percent}% rain`;
   const when = (p) => (p.hours_before === 0 ? "during that hour" : `${p.hours_before}h before`);
 
   if (points.length === 1) {
@@ -555,13 +600,15 @@ function describeHistory(points, time) {
 // Temperature line and rain bars, oldest forecast on the left, like the main chart
 function drawHistory(points) {
   const labels = points.map((p) => (p.hours_before === 0 ? "During" : `${p.hours_before}h before`));
-  const temperatures = points.map((p) => p.temperature_c);
+  const temperatures = points.map((p) => toTemp(p.temperature_c));
   const rainChances = points.map((p) => p.rain_chance_percent);
 
   if (historyChart) {
     historyChart.data.labels = labels;
     historyChart.data.datasets[0].data = temperatures;
     historyChart.data.datasets[1].data = rainChances;
+    historyChart.data.datasets[0].label = `Forecast temperature (${tempUnit()})`;
+    historyChart.options.scales.temp.title.text = `Temperature (${tempUnit()})`;
     historyChart.update();
     return;
   }
@@ -572,7 +619,7 @@ function drawHistory(points) {
       datasets: [
         {
           type: "line",
-          label: "Forecast temperature (°C)",
+          label: `Forecast temperature (${tempUnit()})`,
           data: temperatures,
           yAxisID: "temp",
           borderColor: "rgba(75, 192, 192, 1)",
@@ -595,7 +642,7 @@ function drawHistory(points) {
       interaction: { mode: "index", intersect: false },
       scales: {
         x: { title: { display: true, text: "When the forecast was made" } },
-        temp: { position: "left", title: { display: true, text: "Temperature (°C)" } },
+        temp: { position: "left", title: { display: true, text: `Temperature (${tempUnit()})` } },
         rain: {
           position: "right",
           min: 0,
@@ -607,6 +654,26 @@ function drawHistory(points) {
     },
   });
 }
+
+// Changing units: remember the choice, then redraw what's on screen in the new units
+unitsSelect.addEventListener("change", () => {
+  units = unitsSelect.value;
+  try {
+    localStorage.setItem(UNITS_KEY, units);
+  } catch {
+    // Not remembering is fine
+  }
+  if (currentRecords.length > 0) {
+    const nowIndex = findNowIndex(currentRecords, currentPlace.timezone);
+    showNow(currentRecords, nowIndex);
+    drawChart(currentRecords, nowIndex);
+    loadAdvice(currentPlace.name); // the advice sentences come from the server in the new units
+  }
+  if (lastHistory) {
+    historySummary.textContent = describeHistory(lastHistory.points, lastHistory.time);
+    drawHistory(lastHistory.points);
+  }
+});
 
 // Everything above is defined; now open the page
 start();

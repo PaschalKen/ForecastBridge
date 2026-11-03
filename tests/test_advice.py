@@ -8,6 +8,7 @@ from app.advice import (
     rain_advice,
     temperature_advice,
     umbrella_advice,
+    uv_advice,
     wind_advice,
 )
 from app.forecast import HourlyForecast
@@ -166,3 +167,72 @@ def test_find_now_index_falls_back_to_the_first_hour():
     now = datetime(2027, 1, 1, 12, 0, tzinfo=timezone.utc)
 
     assert find_now_index(day(0, 24), utc_offset_seconds=0, now=now) == 0
+
+
+
+# --- units ------------------------------------------------------------------------
+
+def test_temperature_advice_in_fahrenheit():
+    hours = day(0, 12, **{"6": {"temp": 4}})
+
+    assert temperature_advice(hours, units="imperial")[0] == Advice("cold", "Coldest at 6am: 39.2°F")
+
+
+def test_wind_advice_in_mph():
+    hours = day(9, 12, **{"17": {"wind": 35}})
+
+    assert wind_advice(hours, units="imperial") == Advice("wind", "Windy around 5pm, up to 21.7 mph")
+
+
+def test_rules_use_metric_thresholds_whatever_the_units():
+    # 9.5°C is below the 10°C jacket threshold, even though 49.1°F looks warm as a number
+    hours = day(0, 12, **{"5": {"temp": 9.5}})
+
+    kinds = [a.kind for a in temperature_advice(hours, units="imperial")]
+
+    assert kinds == ["cold", "jacket"]
+
+
+def test_build_advice_passes_units_through():
+    records = day(0, 24, **{"10": {"temp": 5, "wind": 40}})
+
+    messages = [a.message for a in build_advice(records, now_index=9, units="imperial")]
+
+    assert "Coldest at 10am: 41°F" in messages
+    assert "Windy around 10am, up to 24.9 mph" in messages
+
+
+# --- uv_advice ----------------------------------------------------------------------
+
+def with_uv(hours, uv_by_hour):
+    """Copies of `hours` with uv_index set for the hours in uv_by_hour ("HH" -> index), else 0."""
+    return [
+        HourlyForecast(h.time, h.temperature_c, h.rain_chance_percent, h.wind_kph,
+                       uv_index=uv_by_hour.get(h.time[11:13], 0.0))
+        for h in hours
+    ]
+
+
+def test_high_uv_reports_the_strongest_hour():
+    hours = with_uv(day(9, 12), {"12": 6.0, "13": 7.4, "14": 6.8})
+
+    assert uv_advice(hours) == Advice("uv", "High UV around 1pm (UV 7.4): wear sunscreen")
+
+
+def test_no_uv_advice_below_6():
+    hours = with_uv(day(9, 12), {"13": 5.9})
+
+    assert uv_advice(hours) is None
+
+
+def test_no_uv_advice_for_snapshots_without_uv():
+    # day() builds hours with uv_index=None, like a snapshot saved before UV was added
+    assert uv_advice(day(9, 12)) is None
+
+
+def test_build_advice_puts_uv_last():
+    records = with_uv(day(0, 24, **{"10": {"temp": 5, "wind": 40}}), {"13": 8.0})
+
+    kinds = [a.kind for a in build_advice(records, now_index=9)]
+
+    assert kinds == ["dry", "cold", "jacket", "wind", "uv"]

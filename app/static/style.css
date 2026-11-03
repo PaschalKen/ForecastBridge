@@ -212,3 +212,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 /* The 48-hour chart's hours can be clicked to show their history */
 #forecast-chart { cursor: pointer; }
+
+/* Units dropdown: keep "km/h" lowercase (other dropdowns capitalise their text) */
+#units-select { text-transform: none; }
+
+/* "Feels like ..." under the temperature */
+.card .subtitle { color: var(--muted); font-size: 0.875rem; }

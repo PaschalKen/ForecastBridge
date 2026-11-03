@@ -14,11 +14,16 @@ RAIN_POSSIBLE_PERCENT = 30   # at or above this (but below likely): "Small chanc
 UMBRELLA_PERCENT = RAIN_LIKELY_PERCENT  # any hour at or above this: "Take an umbrella"
 JACKET_BELOW_C = 10          # coldest hour below this: "Take a jacket"
 WINDY_KPH = 30               # strongest wind at or above this: "Windy"
+HIGH_UV_INDEX = 6            # strongest UV at or above this ("high" on the WHO scale): "wear sunscreen"
+
+# "metric" (°C, km/h) or "imperial" (°F, mph). The rules always work in metric; only the
+# numbers in the messages are converted.
+METRIC, IMPERIAL = "metric", "imperial"
 
 
 @dataclass(frozen=True)
 class Advice:
-    kind: str     # "rain", "rain-possible", "dry", "umbrella", "cold", "jacket" or "wind"
+    kind: str     # "rain", "rain-possible", "dry", "umbrella", "cold", "jacket", "wind" or "uv"
     message: str  # the sentence shown to the user
 
 
@@ -32,6 +37,20 @@ def format_hour(time: str) -> str:
 def format_number(value: float) -> str:
     """4.0 -> "4", 9.5 -> "9.5" (f"{value:g}" drops a trailing .0)."""
     return f"{value:g}"
+
+
+def format_temperature(celsius: float, units: str = METRIC) -> str:
+    """12.4 -> "12.4°C", or in imperial "54.3°F"."""
+    if units == IMPERIAL:
+        return f"{format_number(round(celsius * 9 / 5 + 32, 1))}°F"
+    return f"{format_number(celsius)}°C"
+
+
+def format_speed(kph: float, units: str = METRIC) -> str:
+    """35.0 -> "35 km/h", or in imperial "21.7 mph"."""
+    if units == IMPERIAL:
+        return f"{format_number(round(kph / 1.609344, 1))} mph"
+    return f"{format_number(kph)} km/h"
 
 
 def rain_advice(hours: list[HourlyForecast]) -> Advice:
@@ -58,10 +77,10 @@ def umbrella_advice(hours: list[HourlyForecast]) -> Advice | None:
     return None
 
 
-def temperature_advice(hours: list[HourlyForecast]) -> list[Advice]:
+def temperature_advice(hours: list[HourlyForecast], units: str = METRIC) -> list[Advice]:
     """The coldest hour, plus a jacket suggestion if it's below JACKET_BELOW_C."""
     coldest = min(hours, key=lambda h: h.temperature_c)
-    advice = [Advice("cold", f"Coldest at {format_hour(coldest.time)}: {format_number(coldest.temperature_c)}°C")]
+    advice = [Advice("cold", f"Coldest at {format_hour(coldest.time)}: {format_temperature(coldest.temperature_c, units)}")]
 
     if coldest.temperature_c < JACKET_BELOW_C:
         advice.append(Advice("jacket", "Take a jacket"))
@@ -69,16 +88,30 @@ def temperature_advice(hours: list[HourlyForecast]) -> list[Advice]:
     return advice
 
 
-def wind_advice(hours: list[HourlyForecast]) -> Advice | None:
+def wind_advice(hours: list[HourlyForecast], units: str = METRIC) -> Advice | None:
     """The windiest hour if it reaches WINDY_KPH, otherwise None."""
     windiest = max(hours, key=lambda h: h.wind_kph)
     if windiest.wind_kph < WINDY_KPH:
         return None
 
-    return Advice("wind", f"Windy around {format_hour(windiest.time)}, up to {format_number(windiest.wind_kph)} km/h")
+    return Advice("wind", f"Windy around {format_hour(windiest.time)}, up to {format_speed(windiest.wind_kph, units)}")
 
 
-def build_advice(records: list[HourlyForecast], now_index: int) -> list[Advice]:
+def uv_advice(hours: list[HourlyForecast]) -> Advice | None:
+    """The strongest UV hour if it reaches HIGH_UV_INDEX, otherwise None (also when the
+    snapshot is from before UV was saved)."""
+    known = [h for h in hours if h.uv_index is not None]
+    if not known:
+        return None
+
+    strongest = max(known, key=lambda h: h.uv_index)
+    if strongest.uv_index < HIGH_UV_INDEX:
+        return None
+
+    return Advice("uv", f"High UV around {format_hour(strongest.time)} (UV {format_number(strongest.uv_index)}): wear sunscreen")
+
+
+def build_advice(records: list[HourlyForecast], now_index: int, units: str = METRIC) -> list[Advice]:
     """All the advice for the HOURS_AHEAD hours starting at records[now_index]:
     rain, umbrella (if rain is likely), temperature, then wind (if windy). [] if no hours are left."""
     hours = records[now_index:now_index + HOURS_AHEAD]
@@ -91,11 +124,11 @@ def build_advice(records: list[HourlyForecast], now_index: int) -> list[Advice]:
     if umbrella is not None:
         advice.append(umbrella)
 
-    advice += temperature_advice(hours)
+    advice += temperature_advice(hours, units)
 
-    wind = wind_advice(hours)
-    if wind is not None:
-        advice.append(wind)
+    for extra in (wind_advice(hours, units), uv_advice(hours)):
+        if extra is not None:
+            advice.append(extra)
 
     return advice
 
