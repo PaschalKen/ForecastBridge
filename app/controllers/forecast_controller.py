@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
@@ -44,12 +45,12 @@ class ForecastController:
     def get_forecast(self, name: str) -> list[HourlyForecast]:
         return WeatherClient.format_forecast(self._get_raw(name))
 
-    def get_advice(self, name: str) -> list[Advice]:
+    def get_advice(self, name: str, units: str = "metric") -> list[Advice]:
         """Plain-language advice for the next few hours, starting from the current hour."""
         raw = self._get_raw(name)
         records = WeatherClient.format_forecast(raw)
         now_index = find_now_index(records, raw.get("utc_offset_seconds", 0))
-        return build_advice(records, now_index)
+        return build_advice(records, now_index, units)
 
     def get_history(self, name: str, target_time: str) -> list[HistoryPoint]:
         """How the forecast for one hour (local time, e.g. "2026-11-03T15:00") changed across
@@ -81,7 +82,8 @@ class ForecastController:
         now = datetime.now(timezone.utc)
 
         raw = self._load_from_store(location, now)
-        if raw is None:
+        # A snapshot saved before we asked for feels-like and UV is refetched (and overwritten)
+        if raw is None or not WeatherClient.has_all_fields(raw):
             try:
                 raw = self.weather.fetch_raw_forecast(location)
             except requests.RequestException as error:
@@ -159,10 +161,15 @@ def get_forecast(location: str, controller: ForecastController = Depends(get_con
 
 
 @router.get("/advice")
-def get_advice(location: str, controller: ForecastController = Depends(get_controller)) -> list[Advice]:
-    """Plain-language advice for the next 12 hours, e.g. "Rain likely from 3pm (80%)"."""
+def get_advice(
+    location: str,
+    units: Literal["metric", "imperial"] = "metric",
+    controller: ForecastController = Depends(get_controller),
+) -> list[Advice]:
+    """Plain-language advice for the next 12 hours, e.g. "Rain likely from 3pm (80%)".
+    `units=imperial` gives temperatures in °F and wind in mph."""
     try:
-        return controller.get_advice(location)
+        return controller.get_advice(location, units)
     except (LocationNotFoundError, ProviderUnavailableError) as error:
         raise to_http_error(location, error)
 

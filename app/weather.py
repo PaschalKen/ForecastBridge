@@ -7,6 +7,16 @@ from app.forecast import HourlyForecast
 from app.location import LOCATIONS, Location
 
 
+# The hourly values asked from Open-Meteo. A cached snapshot missing any of them is out of date.
+HOURLY_FIELDS = [
+    "temperature_2m",
+    "precipitation_probability",
+    "wind_speed_10m",
+    "apparent_temperature",
+    "uv_index",
+]
+
+
 class WeatherClient:
     """Talks to Open-Meteo. One client is reused for every location."""
 
@@ -19,7 +29,7 @@ class WeatherClient:
         params = {
             "latitude": location.latitude,
             "longitude": location.longitude,
-            "hourly": "temperature_2m,precipitation_probability,wind_speed_10m",
+            "hourly": ",".join(HOURLY_FIELDS),
             "forecast_days": 2,
             "timezone": location.timezone,  # times come back in the place's own time zone
         }
@@ -36,22 +46,35 @@ class WeatherClient:
     def format_forecast(data: dict) -> list[HourlyForecast]:
         """Turn Open-Meteo's separate hourly lists into one record per hour."""
         hourly = data["hourly"]
+        hours = len(hourly["time"])
+        # Older snapshots don't have the newer fields: use None for every hour instead
+        feels_like = hourly.get("apparent_temperature") or [None] * hours
+        uv = hourly.get("uv_index") or [None] * hours
         records = []
 
-        for time, temperature, rain_chance, wind in zip(
+        for time, temperature, rain_chance, wind, feels, uv_index in zip(
             hourly["time"],
             hourly["temperature_2m"],
             hourly["precipitation_probability"],
             hourly["wind_speed_10m"],
+            feels_like,
+            uv,
         ):
             records.append(HourlyForecast(
                 time=time,
                 temperature_c=temperature,
                 rain_chance_percent=rain_chance,
                 wind_kph=wind,  # Open-Meteo returns km/h by default
+                feels_like_c=feels,
+                uv_index=uv_index,
             ))
 
         return records
+
+    @staticmethod
+    def has_all_fields(data: dict) -> bool:
+        """True if a saved snapshot has every hourly field we now ask for."""
+        return all(field in data.get("hourly", {}) for field in HOURLY_FIELDS)
 
 
 if __name__ == "__main__":

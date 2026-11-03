@@ -20,8 +20,11 @@ an API, tests, a scheduled data pipeline, cloud storage, permissions and monitor
   hour, and on phones the chart scrolls sideways.
 - **Forecast history:** click any hour on the chart to see how its forecast changed across the
   hourly snapshots in S3, e.g. "36h before it said 11.4°C, 0% rain; during that hour 10.9°C, 14%".
+- **Feels like** under the temperature, a **UV index** card, and a **units** switch (°C and km/h, or °F and mph) that
+  the page remembers.
 - **Plain-language advice** for the next 12 hours, such as "Rain likely from 3pm (80%)",
-  "Coldest at 6am: 4°C" and "Take a jacket", worked out from the forecast with tested rules.
+  "Coldest at 6am: 4°C", "Take a jacket" and "High UV around 1pm: wear sunscreen", worked out
+  from the forecast with tested rules.
 - **REST API** with interactive docs at `/docs`.
 - **Hourly collection:** a scheduled AWS Lambda job saves every city's forecast to S3 at 5 past
   each hour, building up a history.
@@ -61,7 +64,7 @@ CloudWatch: logs, plus an alarm that emails (SNS) if a collector run fails
 | Endpoint | Returns |
 |----------|---------|
 | `GET /forecast?location=london` | 48 hourly records for today and tomorrow. 404 for an unknown city, 503 if Open-Meteo is unavailable |
-| `GET /advice?location=london` | Plain-language advice for the next 12 hours, e.g. `{"kind": "rain", "message": "Rain likely from 3pm (80%)"}` |
+| `GET /advice?location=london&units=metric` | Plain-language advice for the next 12 hours, e.g. `{"kind": "rain", "message": "Rain likely from 3pm (80%)"}` |
 | `GET /history?location=london&time=2026-11-03T15:00` | What each saved hourly snapshot (up to 48 hours before) forecast for that hour, oldest first |
 | `GET /places?query=brighton` | Places matching a name, each with a `name` to use as `location`, a `label` and a `timezone` |
 | `GET /locations` | The featured cities, in the same format |
@@ -105,7 +108,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env              # set S3_BUCKET and AWS_PROFILE to enable caching
 uvicorn app.main:app --reload     # http://127.0.0.1:8000
-pytest                            # 89 tests
+pytest                            # 102 tests
 ```
 
 Without AWS credentials the app still works; it just doesn't cache.

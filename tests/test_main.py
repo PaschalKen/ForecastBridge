@@ -282,3 +282,33 @@ def test_history_returns_503_when_storage_is_down():
     response = client.get("/history", params={"location": "london", "time": "2026-10-17T01:00"})
 
     assert response.status_code == 503
+
+
+def test_cached_snapshot_from_before_feels_like_and_uv_is_refetched():
+    weather, store = FakeWeatherClient(), FakeStore()
+    store.snapshots["portsmouth"] = {"hourly": {
+        k: v for k, v in SAMPLE_DATA["hourly"].items() if k not in ("apparent_temperature", "uv_index")
+    }}
+    use(weather, store)
+
+    response = client.get("/forecast", params={"location": "portsmouth"})
+
+    assert weather.calls == 1                          # fetched again, not served from the old copy
+    assert store.snapshots["portsmouth"] == SAMPLE_DATA  # and the saved copy was updated
+    assert response.json()[0]["feels_like_c"] == 10.1
+
+
+def test_advice_in_imperial_units():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth", "units": "imperial"})
+
+    assert {"kind": "cold", "message": "Coldest at 1am: 53.4°F"} in response.json()
+
+
+def test_advice_rejects_unknown_units():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth", "units": "kelvin"})
+
+    assert response.status_code == 422

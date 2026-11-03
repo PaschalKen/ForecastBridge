@@ -6,7 +6,7 @@
   <title>ForecastBridge</title>
   <!-- ?v=N gives the file a new address, so browsers can't reuse an old saved copy.
        Bump the number for both files when you change either and older copies exist. -->
-  <link rel="stylesheet" href="/static/style.css?v=3">
+  <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body>
   <main>
@@ -24,6 +24,13 @@
           Location
           <select id="location-select"></select>
         </label>
+        <label>
+          Units
+          <select id="units-select">
+            <option value="metric">°C, km/h</option>
+            <option value="imperial">°F, mph</option>
+          </select>
+        </label>
       </div>
     </header>
 
@@ -33,9 +40,13 @@
     <!-- "Right now" summary: filled in by app.js -->
     <h2 class="now-heading">Right now <span id="now-time"></span></h2>
     <section id="now" class="cards">
-      <div class="card"><span class="label">Temperature</span><span id="now-temp" class="value">–</span></div>
+      <div class="card">
+        <span class="label">Temperature</span><span id="now-temp" class="value">–</span>
+        <span id="now-feels" class="subtitle"></span>
+      </div>
       <div class="card"><span class="label">Chance of rain</span><span id="now-rain" class="value">–</span></div>
       <div class="card"><span class="label">Wind</span><span id="now-wind" class="value">–</span></div>
+      <div class="card"><span class="label">UV index</span><span id="now-uv" class="value">–</span></div>
     </section>
 
     <!-- Plain-language advice for the next 12 hours: filled in by app.js from GET /advice -->
@@ -74,6 +85,6 @@
 
   <!-- Chart.js from a CDN (pinned version), then our own script -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/app.js?v=3"></script>
+  <script src="/static/app.js?v=4"></script>
 </body>
 </html>
