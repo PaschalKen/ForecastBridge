@@ -1,8 +1,9 @@
 import sys
+from datetime import date
 
 import requests
 
-from app.config import OPEN_METEO_URL
+from app.config import ARCHIVE_URL, OPEN_METEO_URL
 from app.forecast import HourlyForecast
 from app.location import LOCATIONS, Location
 
@@ -20,9 +21,10 @@ HOURLY_FIELDS = [
 class WeatherClient:
     """Talks to Open-Meteo. One client is reused for every location."""
 
-    def __init__(self, url: str = OPEN_METEO_URL, timeout: int = 10):
+    def __init__(self, url: str = OPEN_METEO_URL, timeout: int = 10, archive_url: str = ARCHIVE_URL):
         self.url = url
         self.timeout = timeout
+        self.archive_url = archive_url
 
     def fetch_raw_forecast(self, location: Location) -> dict:
         """Open-Meteo's response exactly as received (the collector saves this)."""
@@ -36,6 +38,21 @@ class WeatherClient:
 
         response = requests.get(self.url, params=params, timeout=self.timeout)
         response.raise_for_status()  # Raise an error for bad responses
+        return response.json()
+
+    def fetch_actuals(self, location: Location, start: date, end: date) -> dict:
+        """What the weather actually was, hour by hour, from start to end (local dates, inclusive):
+        Open-Meteo's historical archive, as received. Recent hours can be missing (None)."""
+        params = {
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "hourly": "temperature_2m,precipitation",
+            "timezone": location.timezone,  # same local times as the forecasts, so hours line up
+        }
+        response = requests.get(self.archive_url, params=params, timeout=self.timeout)
+        response.raise_for_status()
         return response.json()
 
     def get_forecast(self, location: Location) -> list[HourlyForecast]:

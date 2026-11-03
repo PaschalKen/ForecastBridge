@@ -312,3 +312,12 @@ def test_advice_rejects_unknown_units():
     response = client.get("/advice", params={"location": "portsmouth", "units": "kelvin"})
 
     assert response.status_code == 422
+
+
+def test_accuracy_page_is_served_and_linked_from_the_main_page():
+    page = client.get("/how-accurate")
+
+    assert page.status_code == 200
+    assert "How accurate were the forecasts?" in page.text
+    assert page.headers["cache-control"] == "no-cache"
+    assert 'href="/how-accurate"' in client.get("/").text

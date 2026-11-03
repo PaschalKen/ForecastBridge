@@ -6,12 +6,15 @@
   <title>ForecastBridge</title>
   <!-- ?v=N gives the file a new address, so browsers can't reuse an old saved copy.
        Bump the number for both files when you change either and older copies exist. -->
-  <link rel="stylesheet" href="/static/style.css?v=4">
+  <link rel="stylesheet" href="/static/style.css?v=6">
 </head>
 <body>
   <main>
-    <header>
-      <h1>ForecastBridge</h1>
+    <header class="two-rows">
+      <div class="header-top">
+        <h1>ForecastBridge</h1>
+        <a href="/how-accurate" class="nav-link">How accurate? →</a>
+      </div>
       <div class="controls">
         <!-- Search any place: suggestions come from GET /places?query=... -->
         <div class="search">

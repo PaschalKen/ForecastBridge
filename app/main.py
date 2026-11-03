@@ -26,7 +26,7 @@ async def always_check_for_new_front_end(request: Request, call_next):
     when it hasn't, so it stays fast.
     """
     response = await call_next(request)
-    if request.url.path == "/" or request.url.path.startswith("/static/"):
+    if request.url.path in ("/", "/how-accurate") or request.url.path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
@@ -35,6 +35,11 @@ async def always_check_for_new_front_end(request: Request, call_next):
 def root():
     """The front end's main page."""
     return FileResponse(STATIC_DIR / "index.html")
+
+@app.get("/how-accurate", include_in_schema=False)
+def accuracy_page():
+    """How accurate the saved forecasts were (the data comes from GET /accuracy)."""
+    return FileResponse(STATIC_DIR / "accuracy.html")
 
 @app.get("/health")
 def health_check():

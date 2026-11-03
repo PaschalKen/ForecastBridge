@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How accurate? · ForecastBridge</title>
+  <!-- ?v=N gives the file a new address, so browsers can't reuse an old saved copy -->
+  <link rel="stylesheet" href="/static/style.css?v=6">
+</head>
+<body>
+  <main>
+    <header class="two-rows">
+      <div class="header-top">
+        <h1>ForecastBridge</h1>
+        <a href="/" class="nav-link">← Forecast</a>
+      </div>
+      <div class="controls">
+        <label>
+          Location
+          <select id="location-select"></select>
+        </label>
+        <label>
+          Period
+          <select id="days-select">
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <!-- Shown while loading, or when something goes wrong -->
+    <p id="status" role="status"></p>
+
+    <!-- Summary for forecasts made about a day ahead: filled in by accuracy.js from GET /accuracy -->
+    <h2 class="now-heading">How accurate were the forecasts? <span id="period"></span></h2>
+    <section class="cards">
+      <div class="card">
+        <span class="label">Hours compared</span><span id="acc-hours" class="value">–</span>
+        <span id="acc-forecasts" class="subtitle"></span>
+      </div>
+      <div class="card">
+        <span class="label">Typical error, a day ahead</span><span id="acc-error" class="value">–</span>
+        <span id="acc-bias" class="subtitle"></span>
+      </div>
+      <div class="card">
+        <span class="label">Within 2° of what happened</span><span id="acc-within" class="value">–</span>
+        <span class="subtitle">forecasts made a day ahead</span>
+      </div>
+      <div class="card">
+        <span class="label">"Rain likely" was right</span><span id="acc-rain" class="value">–</span>
+        <span id="acc-dry" class="subtitle"></span>
+      </div>
+    </section>
+
+    <!-- Each hour's actual temperature against the forecast made about a day before -->
+    <section class="chart-panel">
+      <div class="chart-toolbar">
+        <h2>Forecast vs what happened</h2>
+      </div>
+      <div class="chart-box">
+        <div class="chart-inner">
+          <canvas id="comparison-chart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Accuracy for each distance ahead -->
+    <section class="history-panel">
+      <div class="chart-toolbar">
+        <h2>Accuracy by how far ahead</h2>
+      </div>
+      <div class="chart-box table-box">
+        <table class="lead-table">
+          <thead>
+            <tr>
+              <th>Forecast made</th>
+              <th>Forecasts</th>
+              <th>Typical error</th>
+              <th>Bias</th>
+              <th>Within 2°</th>
+              <th>"Rain likely" was right</th>
+              <th>"Dry" was right</th>
+            </tr>
+          </thead>
+          <tbody id="lead-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="footnote">
+      "What happened" is Open-Meteo's historical weather (ERA5: weather-model data corrected with
+      observations), which covers areas about 30 km across, while each forecast is for the city's
+      exact point. So part of the error is a steady difference between the two rather than a wrong
+      forecast: that's the bias (+ means forecasts ran warmer). An hour counts as rainy with 0.1 mm
+      of rain or more. Forecasts come from the hourly snapshots ForecastBridge saves.
+    </p>
+  </main>
+
+  <!-- Chart.js from a CDN (pinned version), then this page's script -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/static/accuracy.js?v=1"></script>
+</body>
+</html>

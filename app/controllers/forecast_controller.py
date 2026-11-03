@@ -7,6 +7,7 @@ import requests
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.accuracy import AccuracyReport, compare, parse_actuals
 from app.advice import Advice, build_advice, find_now_index
 from app.forecast import HourlyForecast
 from app.geocoding import GeocodingClient, get_geocoding
@@ -28,6 +29,11 @@ class ProviderUnavailableError(Exception):
 
 class HistoryUnavailableError(Exception):
     pass
+
+
+# Accuracy reports already worked out this hour (each takes a few hundred S3 reads), shared by
+# requests while this Lambda instance stays warm
+_accuracy_cache: dict[tuple, AccuracyReport] = {}
 
 
 class ForecastController:
@@ -72,6 +78,39 @@ class ForecastController:
             raise HistoryUnavailableError() from error
 
         return forecast_history(snapshots, target_time)
+
+    def get_accuracy(self, name: str, days: int) -> AccuracyReport:
+        """How accurate the saved forecasts were over the last `days` full days (up to yesterday)."""
+        location = self._resolve(name)
+
+        # One report per place, length and hour is plenty: it only changes as new hours are recorded
+        cache_key = (location.name, days, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H"))
+        if cache_key in _accuracy_cache:
+            return _accuracy_cache[cache_key]
+
+        today = datetime.now(timezone.utc).date()
+        first_day, last_day = today - timedelta(days=days), today - timedelta(days=1)
+
+        try:
+            actuals = parse_actuals(self.weather.fetch_actuals(location, first_day, last_day))
+        except requests.RequestException as error:
+            raise ProviderUnavailableError() from error
+
+        # Snapshots from 2 days before the first hour (forecasts reach 48 hours ahead) to the end
+        # of the last day, with time zone margin; compare() keeps only real 1-48 hour forecasts.
+        start = datetime.combine(first_day, datetime.min.time(), timezone.utc) - timedelta(hours=48 + 14)
+        end = datetime.combine(last_day, datetime.min.time(), timezone.utc) + timedelta(hours=24 + 14)
+        try:
+            snapshots = self.store.snapshots_between(location.name, start, end)
+        except (BotoCoreError, ClientError) as error:
+            logger.warning("Could not read snapshots for accuracy of %s", location.name, exc_info=True)
+            raise HistoryUnavailableError() from error
+
+        report = compare(snapshots, actuals)
+        if len(_accuracy_cache) > 100:  # a small cache: drop everything rather than grow forever
+            _accuracy_cache.clear()
+        _accuracy_cache[cache_key] = report
+        return report
 
     def _get_raw(self, name: str) -> dict:
         """This hour's raw forecast for a location: from the store if saved, otherwise from
@@ -147,7 +186,7 @@ def to_http_error(location: str, error: Exception) -> HTTPException:
             detail=f"Location '{location.lower()}' not found. Available: {', '.join(LOCATIONS)}",
         )
     if isinstance(error, HistoryUnavailableError):
-        return HTTPException(status_code=503, detail="Forecast history is unavailable. Try again later.")
+        return HTTPException(status_code=503, detail="Saved forecasts are unavailable. Try again later.")
     return HTTPException(status_code=503, detail="Weather provider is unavailable. Try again later.")
 
 
@@ -184,5 +223,19 @@ def get_history(
     before) said about it, oldest first. `time` is in the place's local time, as /forecast shows it."""
     try:
         return controller.get_history(location, time)
+    except (LocationNotFoundError, ProviderUnavailableError, HistoryUnavailableError) as error:
+        raise to_http_error(location, error)
+
+
+@router.get("/accuracy")
+def get_accuracy(
+    location: str,
+    days: int = Query(7, ge=1, le=14),
+    controller: ForecastController = Depends(get_controller),
+) -> AccuracyReport:
+    """How accurate the saved forecasts were over the last `days` full days: each forecast compared
+    with what actually happened (Open-Meteo's historical archive), grouped by how far ahead it was made."""
+    try:
+        return controller.get_accuracy(location, days)
     except (LocationNotFoundError, ProviderUnavailableError, HistoryUnavailableError) as error:
         raise to_http_error(location, error)

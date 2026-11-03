@@ -214,7 +214,47 @@ button:disabled { opacity: 0.5; cursor: default; }
 #forecast-chart { cursor: pointer; }
 
 /* Units dropdown: keep "km/h" lowercase (other dropdowns capitalise their text) */
-#units-select { text-transform: none; }
+#units-select, #days-select { text-transform: none; }
 
 /* "Feels like ..." under the temperature */
 .card .subtitle { color: var(--muted); font-size: 0.875rem; }
+
+/* --- Links between the two pages --- */
+.nav-link { color: var(--muted); text-decoration: none; }
+.nav-link:hover { color: var(--text); text-decoration: underline; }
+
+/* --- "How accurate?" page --- */
+.table-box { padding: 0; }  /* the table's own cells give the spacing */
+
+.lead-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.lead-table th,
+.lead-table td {
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.lead-table th { color: var(--muted); font-weight: 600; font-size: 0.875rem; }
+.lead-table tbody tr:last-child td { border-bottom: none; }
+
+.footnote { margin-top: 24px; color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
+
+/* --- Two-row header: title and page link on top, the controls underneath --- */
+header.two-rows {
+  display: block;
+}
+
+.header-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+header.two-rows .controls { margin-top: 12px; }
