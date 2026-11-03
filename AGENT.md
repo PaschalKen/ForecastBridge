@@ -27,9 +27,12 @@ and serve it through an API.
 ```
 app/
   config.py    # settings, read from environment variables / .env
-  location.py  # Location dataclass, LOCATIONS registry, Location.get_location(name)
+  location.py  # Location (name, coords, label, timezone), featured LOCATIONS, place_id_from(name)
+  history.py   # pure: snapshots -> HistoryPoint list (how one hour's forecast changed)
+  geocoding.py # GeocodingClient: search(query), get(place_id); searched places are named "place-<id>"
   forecast.py  # HourlyForecast dataclass (one hour of weather)
   weather.py   # WeatherClient: fetch_raw_forecast(location), get_forecast(location)
+  advice.py    # pure rules: hourly records -> plain-language Advice (thresholds at the top)
   storage.py   # SnapshotStore: save(location_name, data) to S3
   collector.py # Collector (all locations -> S3) and handler() for Lambda
   main.py      # FastAPI app: wires routers together
@@ -89,6 +92,11 @@ date when anything on AWS changes.
 - S3 snapshot keys are hourly: `raw/<location>/<YYYY-MM-DD>/<HH>.json` (UTC). The API checks for this hour's key before calling Open-Meteo, and saves on a miss.
 - Tidied records use the keys `time`, `temperature_c`, `rain_chance_percent`, `wind_kph`.
 - Tests must not depend on the internet; use small hard-coded sample data.
+- Tests must also pass without a `.env` file or AWS credentials: GitHub Actions
+  (`.github/workflows/tests.yml`) runs them on a clean machine for every push and pull request.
+- Merging to `master` deploys automatically (`.github/workflows/deploy.yml`) as the IAM user
+  `forecastbridge-github-deploy`, whose key is in GitHub secrets. Never commit AWS keys, and never
+  widen that user's permissions beyond updating the two functions' code.
 - Pin versions in `requirements.txt`, and add new packages there when they are installed.
 - Settings go in `app/config.py`, read with `os.getenv` and a sensible default. Add new ones to `.env.example`.
 - Never commit secrets or AWS credentials.

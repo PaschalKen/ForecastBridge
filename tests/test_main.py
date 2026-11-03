@@ -44,6 +44,10 @@ class FakeStore:
         self.snapshots[location_name] = data
         return f"raw/{location_name}/test.json"
 
+    def snapshots_between(self, location_name, start, end):
+        # History tests put (saved hour, raw) pairs in self.history
+        return [(when, raw) for when, raw in getattr(self, "history", []) if start <= when <= end]
+
 
 class BrokenStore:
     """Behaves as if S3 is unreachable."""
@@ -52,6 +56,9 @@ class BrokenStore:
         raise EndpointConnectionError(endpoint_url="https://s3.example")
 
     def save(self, location_name, data, when=None):
+        raise EndpointConnectionError(endpoint_url="https://s3.example")
+
+    def snapshots_between(self, location_name, start, end):
         raise EndpointConnectionError(endpoint_url="https://s3.example")
 
 
@@ -177,3 +184,131 @@ def test_static_files_are_served():
     response = client.get("/static/app.js")
 
     assert response.status_code == 200
+
+
+def test_advice_for_known_location_returns_messages():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth"})
+
+    # SAMPLE_DATA's dates are in the past, so advice starts from its first hour:
+    # rain 20% then 35%, temperatures 12.4 then 11.9, light wind
+    assert response.status_code == 200
+    assert response.json() == [
+        {"kind": "rain-possible", "message": "Small chance of rain around 1am (35%)"},
+        {"kind": "cold", "message": "Coldest at 1am: 11.9°C"},
+    ]
+
+
+def test_advice_for_unknown_location_returns_404():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "paris"})
+
+    assert response.status_code == 404
+
+
+def test_advice_when_fetch_fails_returns_503():
+    use(BrokenWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth"})
+
+    assert response.status_code == 503
+
+
+def test_front_end_files_tell_browsers_to_check_for_updates():
+    for path in ["/", "/static/app.js", "/static/style.css"]:
+        response = client.get(path)
+
+        assert response.headers["cache-control"] == "no-cache", path
+
+
+def test_api_responses_are_not_affected_by_the_front_end_cache_rule():
+    response = client.get("/health")
+
+    assert "cache-control" not in response.headers
+
+
+# --- GET /history ----------------------------------------------------------------
+
+def test_history_returns_what_each_snapshot_forecast():
+    from datetime import datetime, timezone
+
+    store = FakeStore()
+    # SAMPLE_DATA covers 2026-10-17 00:00 and 01:00 (offset 0); saved 3 hours before 01:00
+    store.history = [(datetime(2026, 10, 16, 22, tzinfo=timezone.utc), SAMPLE_DATA)]
+    use(FakeWeatherClient(), store)
+
+    response = client.get("/history", params={"location": "portsmouth", "time": "2026-10-17T01:00"})
+
+    assert response.status_code == 200
+    assert response.json() == [{
+        "forecast_made": "2026-10-16T22:00Z",
+        "hours_before": 3,
+        "temperature_c": 11.9,
+        "rain_chance_percent": 35,
+        "wind_kph": 14.8,
+    }]
+
+
+def test_history_with_no_snapshots_returns_empty_list():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/history", params={"location": "london", "time": "2026-10-17T01:00"})
+
+    assert response.json() == []
+
+
+def test_history_rejects_a_badly_formatted_time():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/history", params={"location": "london", "time": "tomorrow"})
+
+    assert response.status_code == 422
+
+
+def test_history_for_unknown_location_returns_404():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/history", params={"location": "paris", "time": "2026-10-17T01:00"})
+
+    assert response.status_code == 404
+
+
+def test_history_returns_503_when_storage_is_down():
+    # The cache can quietly skip a broken store, but history only exists in storage
+    use(FakeWeatherClient(), BrokenStore())
+
+    response = client.get("/history", params={"location": "london", "time": "2026-10-17T01:00"})
+
+    assert response.status_code == 503
+
+
+def test_cached_snapshot_from_before_feels_like_and_uv_is_refetched():
+    weather, store = FakeWeatherClient(), FakeStore()
+    store.snapshots["portsmouth"] = {"hourly": {
+        k: v for k, v in SAMPLE_DATA["hourly"].items() if k not in ("apparent_temperature", "uv_index")
+    }}
+    use(weather, store)
+
+    response = client.get("/forecast", params={"location": "portsmouth"})
+
+    assert weather.calls == 1                          # fetched again, not served from the old copy
+    assert store.snapshots["portsmouth"] == SAMPLE_DATA  # and the saved copy was updated
+    assert response.json()[0]["feels_like_c"] == 10.1
+
+
+def test_advice_in_imperial_units():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth", "units": "imperial"})
+
+    assert {"kind": "cold", "message": "Coldest at 1am: 53.4°F"} in response.json()
+
+
+def test_advice_rejects_unknown_units():
+    use(FakeWeatherClient(), FakeStore())
+
+    response = client.get("/advice", params={"location": "portsmouth", "units": "kelvin"})
+
+    assert response.status_code == 422

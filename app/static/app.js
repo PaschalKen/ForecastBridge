@@ -1,8 +1,42 @@
 // ForecastBridge front end.
 // Open the browser's DevTools console (Cmd+Option+J) to see errors and console.log output.
 
-const select = document.getElementById("location-select");
 const statusEl = document.getElementById("status");
+const searchInput = document.getElementById("place-search");
+const resultsList = document.getElementById("place-results");
+const select = document.getElementById("location-select");
+
+// A place is { name, label, timezone, ... } as sent by /locations and /places.
+// `name` goes in API calls ("london" or "place-2654710"), `label` is shown to people.
+const DEFAULT_PLACE_NAME = "london";             // first visit, or if the saved place stops working
+const STORAGE_KEY = "forecastbridge:lastPlace";  // where the last viewed place is remembered
+let currentPlace = null;
+
+// --- Units: °C and km/h, or °F and mph. The API always sends metric; the page converts. ---
+const unitsSelect = document.getElementById("units-select");
+const UNITS_KEY = "forecastbridge:units";
+let units = "metric";
+try {
+  if (localStorage.getItem(UNITS_KEY) === "imperial") units = "imperial";
+} catch {
+  // Storage blocked: use metric
+}
+unitsSelect.value = units;
+
+// Temperature in the chosen units, rounded to 1 decimal place, e.g. 12.4 or 54.3
+function toTemp(celsius) {
+  if (celsius == null) return null;
+  return units === "imperial" ? Math.round((celsius * 9 / 5 + 32) * 10) / 10 : celsius;
+}
+
+// Wind speed in the chosen units, e.g. 15.2 or 9.4
+function toSpeed(kph) {
+  if (kph == null) return null;
+  return units === "imperial" ? Math.round((kph / 1.609344) * 10) / 10 : kph;
+}
+
+const tempUnit = () => (units === "imperial" ? "°F" : "°C");
+const speedUnit = () => (units === "imperial" ? "mph" : "km/h");
 const nowButton = document.getElementById("now-button");
 let chart = null; // the Chart.js chart, kept so we can update it when the location changes
 
@@ -24,50 +58,254 @@ function showStatus(message, isError = false) {
   statusEl.classList.toggle("error", isError);
 }
 
-// 1. Fill the dropdown from GET /locations
-async function loadLocations() {
-  const response = await fetch("/locations");
+// --- Remembering the last place ------------------------------------------------
+// localStorage can be unavailable (private browsing, blocked storage), so every access is wrapped.
 
-  const locations = await response.json();
-
-  locations.forEach((name) => {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    select.appendChild(option);
-  });
+function savePlace(place) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(place));
+  } catch {
+    // Not remembering the place is fine; the page still works
+  }
 }
 
-// 2. Get the forecast for one location from GET /forecast?location=...
-async function loadForecast(name) {
+function readSavedPlace() {
+  try {
+    const place = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (place?.name && place?.label && place?.timezone) return place;
+  } catch {
+    // Missing or unreadable: treat as a first visit
+  }
+  return null;
+}
+
+function forgetSavedPlace() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing to do
+  }
+}
+
+// --- The Location dropdown: featured cities from GET /locations, plus a searched place -----
+
+const placesByName = {}; // every place the dropdown can show, by name, so a choice can be looked up
+
+async function loadFeatured() {
+  const response = await fetch("/locations");
+  const places = await response.json();
+
+  places.forEach((place) => {
+    placesByName[place.name] = place;
+    select.add(new Option(place.label, place.name));
+  });
+  return places;
+}
+
+// Make the dropdown show this place. A searched place gets its own option at the top
+// (replacing any previous searched place), so the dropdown always shows what's on screen.
+function showInDropdown(place) {
+  placesByName[place.name] = place;
+  if (![...select.options].some((option) => option.value === place.name)) {
+    select.querySelector("option[data-searched]")?.remove();
+    const option = new Option(place.label, place.name);
+    option.dataset.searched = "true";
+    select.add(option, 0);
+  }
+  select.value = place.name;
+}
+
+select.addEventListener("change", () => selectPlace(placesByName[select.value]));
+
+// --- Choosing a place ------------------------------------------------------------
+
+// Show a place's forecast; remember it if it loaded. Returns true if it loaded.
+async function selectPlace(place) {
+  currentPlace = place;
+  showInDropdown(place);
+
+  const loaded = await loadForecast(place);
+  if (loaded) savePlace(place);
+  return loaded;
+}
+
+// --- Searching any place: GET /places?query=... -----------------------------------
+
+const SEARCH_DELAY_MS = 300; // wait until typing pauses, rather than searching on every key
+let searchTimer = null;
+let latestSearch = 0;        // numbers each search, so a slow older answer can't overwrite a newer one
+
+function hideResults() {
+  resultsList.hidden = true;
+  resultsList.replaceChildren();
+  searchInput.setAttribute("aria-expanded", "false");
+}
+
+function showResults(places, emptyMessage) {
+  resultsList.replaceChildren();
+
+  if (places.length === 0) {
+    const item = document.createElement("li");
+    item.className = "place-results-empty";
+    item.textContent = emptyMessage;
+    resultsList.appendChild(item);
+  }
+
+  places.forEach((place) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = place.label;
+    button.addEventListener("click", () => {
+      searchInput.value = "";
+      hideResults();
+      selectPlace(place);
+    });
+    item.appendChild(button);
+    resultsList.appendChild(item);
+  });
+
+  resultsList.hidden = false;
+  searchInput.setAttribute("aria-expanded", "true");
+}
+
+async function searchPlaces() {
+  const query = searchInput.value.trim();
+  if (query.length < 2) {
+    hideResults();
+    return;
+  }
+
+  const searchNumber = ++latestSearch;
+  let places;
+  try {
+    const response = await fetch(`/places?query=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+    places = await response.json();
+  } catch {
+    if (searchNumber === latestSearch) showResults([], "Search isn't available right now");
+    return;
+  }
+
+  // The user kept typing while this search was in flight: a newer search owns the list
+  if (searchNumber !== latestSearch) return;
+  showResults(places, `No places found for "${query}"`);
+}
+
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(searchPlaces, SEARCH_DELAY_MS);
+});
+
+searchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    hideResults();
+  } else if (event.key === "Enter") {
+    // Enter picks the first suggestion, if there is one
+    resultsList.querySelector("button")?.click();
+  } else if (event.key === "ArrowDown") {
+    // Down arrow moves into the suggestions (then Tab/Shift+Tab or arrows move between them)
+    event.preventDefault();
+    resultsList.querySelector("button")?.focus();
+  }
+});
+
+resultsList.addEventListener("keydown", (event) => {
+  const buttons = [...resultsList.querySelectorAll("button")];
+  const index = buttons.indexOf(document.activeElement);
+  if (event.key === "ArrowDown" && index < buttons.length - 1) {
+    event.preventDefault();
+    buttons[index + 1].focus();
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    (index > 0 ? buttons[index - 1] : searchInput).focus();
+  } else if (event.key === "Escape") {
+    hideResults();
+    searchInput.focus();
+  }
+});
+
+// Clicking anywhere outside the search closes the suggestions
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".search")) hideResults();
+});
+
+// --- Forecast: GET /forecast?location=... -------------------------------------------
+
+let latestForecast = 0; // like latestSearch: switching place quickly mustn't show an older place's data
+
+// Load and show a place's forecast. Returns true if it loaded.
+async function loadForecast(place) {
   showStatus("Loading…");
+  const requestNumber = ++latestForecast;
 
   let response;
   try {
-    response = await fetch(`/forecast?location=${encodeURIComponent(name)}`);
+    response = await fetch(`/forecast?location=${encodeURIComponent(place.name)}`);
   } catch {
     // fetch only throws when the server can't be reached at all (e.g. uvicorn isn't running)
     showStatus("Can't reach the ForecastBridge server. Is it running?", true);
-    return;
+    return false;
   }
+  if (requestNumber !== latestForecast) return false; // another place was chosen meanwhile
 
   if (!response.ok) {
     const error = await response.json();
     showStatus(`Error: ${error.detail}`, true);
-    return;
+    return false;
   }
 
   const records = await response.json();
-  const nowIndex = findNowIndex(records);
+  if (requestNumber !== latestForecast) return false;
+
+  const nowIndex = findNowIndex(records, place.timezone);
   showNow(records, nowIndex);
   drawChart(records, nowIndex);
   showStatus("");
+  loadAdvice(place.name);
+  currentRecords = records;
+  loadHistory(place, records[nowIndex].time); // start with the current hour
+  return true;
 }
 
-// The current hour in UK time, in the same format as the API: "2026-10-19T18:00"
-function currentHourKey() {
+// An emoji for each kind of advice the API sends back
+const ADVICE_ICONS = {
+  rain: "🌧️",
+  "rain-possible": "🌦️",
+  dry: "☀️",
+  umbrella: "☂️",
+  cold: "🌡️",
+  jacket: "🧥",
+  wind: "💨",
+};
+
+// Fill the "Next 12 hours" list from GET /advice?location=...
+// The advice is a bonus: if it fails, the rest of the page still works, so just hide the list.
+async function loadAdvice(name) {
+  const list = document.getElementById("advice-list");
+  list.replaceChildren(); // clear the previous location's advice
+
+  let advice;
+  try {
+    const response = await fetch(`/advice?location=${encodeURIComponent(name)}&units=${units}`);
+    if (!response.ok) return;
+    advice = await response.json();
+  } catch {
+    return;
+  }
+
+  advice.forEach(({ kind, message }) => {
+    const item = document.createElement("li");
+    item.className = `advice advice-${kind}`;
+    item.textContent = `${ADVICE_ICONS[kind] ?? "•"} ${message}`;
+    list.appendChild(item);
+  });
+}
+
+// The current hour in the place's time zone, in the same format as the API: "2026-10-19T18:00"
+function currentHourKey(timeZone) {
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
+    timeZone,
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
   }).formatToParts(new Date());
   const part = (type) => parts.find((p) => p.type === type).value;
@@ -75,8 +313,9 @@ function currentHourKey() {
 }
 
 // Which record is "now"? The forecast starts at midnight, so it's usually not the first one.
-function findNowIndex(records) {
-  const index = records.findIndex((r) => r.time === currentHourKey());
+function findNowIndex(records, timeZone) {
+  const nowKey = currentHourKey(timeZone);
+  const index = records.findIndex((r) => r.time === nowKey);
   return index === -1 ? 0 : index; // fall back to the first hour if now isn't in the data
 }
 
@@ -89,12 +328,27 @@ function showNow(records, nowIndex) {
 
   const now = records[nowIndex];
   document.getElementById("now-time").textContent = formatHour(now.time);
-  document.getElementById("now-temp").textContent = `${now.temperature_c} °C`;
+  document.getElementById("now-temp").textContent = `${toTemp(now.temperature_c)} ${tempUnit()}`;
   document.getElementById("now-rain").textContent = `${now.rain_chance_percent} %`;
-  document.getElementById("now-wind").textContent = `${now.wind_kph} km/h`;
+  document.getElementById("now-wind").textContent = `${toSpeed(now.wind_kph)} ${speedUnit()}`;
+  // Older saved snapshots have no feels-like or UV: show a dash rather than "null"
+  // Under the temperature; left empty for older saved snapshots that have no feels-like value
+  document.getElementById("now-feels").textContent =
+    now.feels_like_c == null ? "" : `Feels like ${toTemp(now.feels_like_c)} ${tempUnit()}`;
+  document.getElementById("now-uv").textContent =
+    now.uv_index == null ? "–" : `${now.uv_index} ${uvLevel(now.uv_index)}`;
 }
 
-// "2026-10-19T09:00" -> "Mon 09:00" (the API's times are already UK local time)
+// The WHO's words for UV index levels
+function uvLevel(index) {
+  if (index < 3) return "Low";
+  if (index < 6) return "Moderate";
+  if (index < 8) return "High";
+  if (index < 11) return "Very high";
+  return "Extreme";
+}
+
+// "2026-10-19T09:00" -> "Mon 09:00" (the API's times are already in the place's local time)
 function formatHour(time) {
   return new Date(time).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -135,7 +389,7 @@ const nowLinePlugin = {
 function drawChart(records, nowIndex) {
   const ctx = document.getElementById("forecast-chart").getContext("2d");
   const labels = records.map((r) => formatHour(r.time));
-  const temperatures = records.map((r) => r.temperature_c);
+  const temperatures = records.map((r) => toTemp(r.temperature_c));
   const rainChances = records.map((r) => r.rain_chance_percent);
 
   nowHighlight.index = nowIndex;
@@ -145,6 +399,8 @@ function drawChart(records, nowIndex) {
     chart.data.labels = labels;
     chart.data.datasets[0].data = temperatures;
     chart.data.datasets[1].data = rainChances;
+    chart.data.datasets[0].label = `Temperature (${tempUnit()})`;
+    chart.options.scales.temp.title.text = `Temperature (${tempUnit()})`;
     chart.update();
   } else {
     chart = new Chart(ctx, {
@@ -154,7 +410,7 @@ function drawChart(records, nowIndex) {
         datasets: [
           {
             type: "line",
-            label: "Temperature (°C)",
+            label: `Temperature (${tempUnit()})`,
             data: temperatures,
             yAxisID: "temp",
             borderColor: "rgba(75, 192, 192, 1)",
@@ -177,9 +433,16 @@ function drawChart(records, nowIndex) {
         layout: { padding: { top: 20 } }, // room above the chart for the "Now" label
         // Hovering anywhere in an hour's column shows both temperature and rain for that hour
         interaction: { mode: "index", intersect: false },
+        // Clicking an hour shows how its forecast changed, in the panel below
+        onClick: (_event, elements) => {
+          const index = elements[0]?.index;
+          if (index !== undefined && currentPlace && currentRecords[index]) {
+            loadHistory(currentPlace, currentRecords[index].time);
+          }
+        },
         scales: {
           x: { title: { display: true, text: "Time" } },
-          temp: { position: "left", title: { display: true, text: "Temperature (°C)" } },
+          temp: { position: "left", title: { display: true, text: `Temperature (${tempUnit()})` } },
           rain: {
             position: "right",
             min: 0,
@@ -260,7 +523,157 @@ document.getElementById("forecast-chart").addEventListener("touchend", () => {
   }, 1500);
 });
 
-// Start: load locations, then the forecast for the first one, and reload when the dropdown changes
+// Start: show the featured cities, then open the last viewed place (or London on a first visit)
 nowButton.addEventListener("click", flashNow);
-select.addEventListener("change", () => loadForecast(select.value));
-loadLocations().then(() => loadForecast(select.value));
+
+async function start() {
+  let featured = [];
+  try {
+    featured = await loadFeatured();
+  } catch {
+    showStatus("Can't reach the ForecastBridge server. Is it running?", true);
+    return;
+  }
+
+  const saved = readSavedPlace();
+  if (saved && (await selectPlace(saved))) return;
+  if (saved) forgetSavedPlace(); // the saved place no longer loads: fall back quietly
+
+  const fallback = featured.find((place) => place.name === DEFAULT_PLACE_NAME) ?? featured[0];
+  if (fallback) await selectPlace(fallback);
+}
+
+
+// --- How the forecast changed: GET /history?location=...&time=... -----------------------
+
+const historySummary = document.getElementById("history-summary");
+let currentRecords = []; // the 48 hours on the main chart, so a click can find its time
+let historyChart = null;
+let latestHistory = 0;
+let lastHistory = null;  // the history on screen, so changing units can redraw it   // like latestSearch: a slow older answer mustn't replace a newer one
+
+async function loadHistory(place, time) {
+  const requestNumber = ++latestHistory;
+  historySummary.textContent = `Loading the forecast history for ${formatHour(time)}…`;
+
+  let points;
+  try {
+    const response = await fetch(
+      `/history?location=${encodeURIComponent(place.name)}&time=${encodeURIComponent(time)}`
+    );
+    if (!response.ok) throw new Error(`History failed: ${response.status}`);
+    points = await response.json();
+  } catch {
+    if (requestNumber === latestHistory) {
+      historySummary.textContent = "The forecast history isn't available right now.";
+      drawHistory([]);
+    }
+    return;
+  }
+  if (requestNumber !== latestHistory) return; // another hour or place was chosen meanwhile
+
+  lastHistory = { points, time };
+  historySummary.textContent = describeHistory(points, time);
+  drawHistory(points);
+}
+
+// One sentence comparing the earliest saved forecast for the hour with the latest
+function describeHistory(points, time) {
+  const hour = formatHour(time);
+  const tip = "Click any hour on the chart above to see its history.";
+  if (points.length === 0) {
+    return `No saved forecasts for ${hour} yet: history builds up as the hourly snapshots are saved. ${tip}`;
+  }
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const describe = (p) => `${toTemp(p.temperature_c)}${tempUnit()}, ${p.rain_chance_percent}% rain`;
+  const when = (p) => (p.hours_before === 0 ? "during that hour" : `${p.hours_before}h before`);
+
+  if (points.length === 1) {
+    return `${hour}: forecast ${when(first)} as ${describe(first)}. ${tip}`;
+  }
+  return `${hour}: ${points.length} saved forecasts. ${when(first)} it said ${describe(first)}; ` +
+    `${when(last)} it said ${describe(last)}. ${tip}`;
+}
+
+// Temperature line and rain bars, oldest forecast on the left, like the main chart
+function drawHistory(points) {
+  const labels = points.map((p) => (p.hours_before === 0 ? "During" : `${p.hours_before}h before`));
+  const temperatures = points.map((p) => toTemp(p.temperature_c));
+  const rainChances = points.map((p) => p.rain_chance_percent);
+
+  if (historyChart) {
+    historyChart.data.labels = labels;
+    historyChart.data.datasets[0].data = temperatures;
+    historyChart.data.datasets[1].data = rainChances;
+    historyChart.data.datasets[0].label = `Forecast temperature (${tempUnit()})`;
+    historyChart.options.scales.temp.title.text = `Temperature (${tempUnit()})`;
+    historyChart.update();
+    return;
+  }
+
+  historyChart = new Chart(document.getElementById("history-chart").getContext("2d"), {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: "line",
+          label: `Forecast temperature (${tempUnit()})`,
+          data: temperatures,
+          yAxisID: "temp",
+          borderColor: "rgba(75, 192, 192, 1)",
+          backgroundColor: "rgba(75, 192, 192, 0.2)",
+          fill: true,
+        },
+        {
+          type: "bar",
+          label: "Forecast chance of rain (%)",
+          data: rainChances,
+          yAxisID: "rain",
+          backgroundColor: "rgba(54, 120, 220, 0.35)",
+          maxBarThickness: 14,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { title: { display: true, text: "When the forecast was made" } },
+        temp: { position: "left", title: { display: true, text: `Temperature (${tempUnit()})` } },
+        rain: {
+          position: "right",
+          min: 0,
+          max: 100,
+          title: { display: true, text: "Chance of rain (%)" },
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
+  });
+}
+
+// Changing units: remember the choice, then redraw what's on screen in the new units
+unitsSelect.addEventListener("change", () => {
+  units = unitsSelect.value;
+  try {
+    localStorage.setItem(UNITS_KEY, units);
+  } catch {
+    // Not remembering is fine
+  }
+  if (currentRecords.length > 0) {
+    const nowIndex = findNowIndex(currentRecords, currentPlace.timezone);
+    showNow(currentRecords, nowIndex);
+    drawChart(currentRecords, nowIndex);
+    loadAdvice(currentPlace.name); // the advice sentences come from the server in the new units
+  }
+  if (lastHistory) {
+    historySummary.textContent = describeHistory(lastHistory.points, lastHistory.time);
+    drawHistory(lastHistory.points);
+  }
+});
+
+// Everything above is defined; now open the page
+start();

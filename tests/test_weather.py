@@ -10,6 +10,8 @@ SAMPLE_DATA = {
         "temperature_2m": [12.4, 11.9],
         "precipitation_probability": [20, 35],
         "wind_speed_10m": [15.2, 14.8],
+        "apparent_temperature": [10.1, 9.6],
+        "uv_index": [0.0, 0.0],
     }
 }
 
@@ -20,8 +22,10 @@ def test_format_forecast_makes_one_record_per_hour():
     records = WeatherClient.format_forecast(SAMPLE_DATA)
 
     assert records == [
-        HourlyForecast(time="2026-10-17T00:00", temperature_c=12.4, rain_chance_percent=20, wind_kph=15.2),
-        HourlyForecast(time="2026-10-17T01:00", temperature_c=11.9, rain_chance_percent=35, wind_kph=14.8),
+        HourlyForecast(time="2026-10-17T00:00", temperature_c=12.4, rain_chance_percent=20, wind_kph=15.2,
+                       feels_like_c=10.1, uv_index=0.0),
+        HourlyForecast(time="2026-10-17T01:00", temperature_c=11.9, rain_chance_percent=35, wind_kph=14.8,
+                       feels_like_c=9.6, uv_index=0.0),
     ]
 
 
@@ -64,3 +68,36 @@ def test_fetch_raw_forecast_sends_coordinates_and_returns_json(monkeypatch):
 def test_get_location_ignores_capitals_and_returns_none_if_unknown():
     assert Location.get_location("London").name == "london"
     assert Location.get_location("paris") is None
+
+
+def test_fetch_raw_forecast_asks_for_the_places_own_timezone(monkeypatch):
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(params)
+        return FakeResponse()
+
+    monkeypatch.setattr(weather.requests, "get", fake_get)
+    paris = Location("place-2988507", 48.85, 2.35, label="Paris, Île-de-France, France", timezone="Europe/Paris")
+
+    WeatherClient().fetch_raw_forecast(paris)
+
+    assert calls[0]["timezone"] == "Europe/Paris"
+
+
+def test_format_forecast_handles_snapshots_saved_before_feels_like_and_uv():
+    old_snapshot = {"hourly": {k: v for k, v in SAMPLE_DATA["hourly"].items()
+                               if k not in ("apparent_temperature", "uv_index")}}
+
+    records = WeatherClient.format_forecast(old_snapshot)
+
+    assert records[0].temperature_c == 12.4
+    assert records[0].feels_like_c is None
+    assert records[0].uv_index is None
+
+
+def test_has_all_fields_spots_snapshots_missing_newer_fields():
+    old_snapshot = {"hourly": {k: v for k, v in SAMPLE_DATA["hourly"].items() if k != "uv_index"}}
+
+    assert WeatherClient.has_all_fields(SAMPLE_DATA) is True
+    assert WeatherClient.has_all_fields(old_snapshot) is False

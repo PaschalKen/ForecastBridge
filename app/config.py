@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 OPEN_METEO_URL = os.getenv("OPEN_METEO_URL", "https://api.open-meteo.com/v1/forecast")
+GEOCODING_URL = os.getenv("GEOCODING_URL", "https://geocoding-api.open-meteo.com/v1")
 
 # No default: the bucket name is specific to your AWS account
 S3_BUCKET = os.getenv("S3_BUCKET")

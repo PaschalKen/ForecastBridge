@@ -61,7 +61,31 @@ Running the app locally reads and writes the **real** S3 bucket (the tests never
 
 ## 3. Deploy a change to AWS
 
-There is no automatic deployment. A change goes live in four steps.
+### Automatic (normal way)
+
+Merging a pull request into `master` deploys it. The **Deploy** workflow
+(`.github/workflows/deploy.yml`) runs the tests, builds both zips, updates both Lambda functions,
+then checks the live site answers. If any test fails, nothing is deployed. Follow it in the
+repo's **Actions** tab; a red cross means the live site was not changed (or, if only the final
+check failed, that it was changed but isn't answering: look at that step's log).
+
+To redeploy without a code change: **Actions**, then **Deploy**, then **Run workflow**.
+
+GitHub logs in to AWS as the IAM user `forecastbridge-github-deploy`, whose access key is stored
+as two encrypted repository secrets (**Settings**, **Secrets and variables**, **Actions**):
+`AWS_DEPLOY_ACCESS_KEY_ID` and `AWS_DEPLOY_SECRET_ACCESS_KEY`. That user can only upload code to
+the two functions.
+
+- **Rotate the key** every few months: in IAM, create a second access key for the user, update
+  both secrets, run the Deploy workflow by hand to check it works, then delete the old key.
+- **If the key may have leaked:** delete it in IAM straight away (deploys stop until a new key is
+  added), check the functions' **Last modified** time in Lambda, and redeploy from `master`.
+- Keyless login (OIDC) would be safer, but this account's Free plan blocks identity providers
+  (organization rule `p-5dj032io`). After upgrading, switch to OIDC and delete this user.
+
+### By hand (fallback)
+
+If GitHub Actions is unavailable, a change goes live in four steps.
 
 ### Step 1: Test locally
 
@@ -69,13 +93,18 @@ There is no automatic deployment. A change goes live in four steps.
 pytest
 ```
 
-Don't deploy if anything fails.
+Don't deploy if anything fails. GitHub also runs the tests on every push and pull request
+(the **Actions** tab on GitHub, or the tick/cross next to each commit), so check that's green too.
 
 ### Step 2: Build the zips
 
 ```bash
 ./scripts/build_lambda.sh
 ```
+
+It must end with two lines, `Built build/collector.zip (...)` and `Built build/api.zip (...)`.
+If either is missing, the build stopped partway: run it again (with the virtual environment
+active) before uploading anything, or the functions keep running the old code.
 
 This creates two files:
 
@@ -94,14 +123,44 @@ change either function's runtime or architecture without changing the script too
 | `app/static/` (web page) | ✅ | |
 | `app/controllers/`, `app/main.py`, `app/lambda_api.py` | ✅ | |
 | `app/collector.py` | | ✅ |
+| `app/advice.py`, `app/geocoding.py`, `app/history.py` | ✅ | |
 | `app/weather.py`, `app/storage.py`, `app/location.py`, `app/forecast.py`, `app/config.py` | ✅ | ✅ |
 | A library version in `requirements.txt` | ✅ if it's in `api.zip` | ✅ if it's in `collector.zip` |
 
-For each function:
+**From the terminal (recommended).** The account's rules block *creating* resources from the CLI,
+but updating a function's code is allowed:
 
-1. Lambda console (Stockholm), then open the function.
-2. **Code** tab, then **Update**, then **.zip file**, choose the zip, then **Save**.
-3. Ignore a "file not found" editor tab if one appears; the code is uploaded.
+```bash
+# API (web page + /forecast, /advice, ...)
+aws lambda update-function-code --function-name forecastbridge-api \
+  --zip-file fileb://build/api.zip --profile forecastbridge
+aws lambda wait function-updated --function-name forecastbridge-api --profile forecastbridge
+
+# Collector (hourly job)
+aws lambda update-function-code --function-name forecastbridge-collector \
+  --zip-file fileb://build/collector.zip --profile forecastbridge
+aws lambda wait function-updated --function-name forecastbridge-collector --profile forecastbridge
+```
+
+The `wait` command returns once the new code is live.
+
+**Or from the console:** open the function (Stockholm), then **Code**, **Update**, **.zip file**,
+choose the zip, and click **Save** in the upload dialog. Wait for the green "Successfully updated"
+banner; closing the dialog without saving leaves the old code running.
+
+**Confirm the upload happened** (CodeSize should match the zip's size, LastModified should be now):
+
+```bash
+aws lambda get-function-configuration --function-name forecastbridge-api \
+  --query '{LastModified:LastModified,CodeSize:CodeSize}' --profile forecastbridge
+ls -l build/api.zip
+```
+
+Browser caching: the server sends `Cache-Control: no-cache` for the page and `/static/` files,
+so browsers check for a new version on each visit. Copies saved *before* that header existed
+(before 2 Nov 2026) ignore it, which is why `index.html` loads `style.css?v=2` and `app.js?v=2`:
+a new `?v=` number is a new address, so no old copy can be used. If a front-end change ever looks
+stale for visitors, bump that number for both files and redeploy.
 
 ### Step 4: Check it
 
@@ -181,6 +240,7 @@ All in eu-north-1, account `108248327537`.
 | Function URL | https://4hgo4skmrmq4avm52lrgj23lzu0gatfn.lambda-url.eu-north-1.on.aws/ (public, auth NONE) |
 | IAM role `forecastbridge-api-role` | `AWSLambdaBasicExecutionRole` + inline `forecastbridge-api-s3-readwrite`: Get/PutObject on `raw/*`, ListBucket on prefix `raw/*` |
 | Lambda `forecastbridge-collector` | Python 3.12, arm64, 256 MB, 1 min timeout. Handler `app.collector.handler`. Env `S3_BUCKET` |
+| IAM user `forecastbridge-github-deploy` | Used only by the GitHub Deploy workflow (no console access). Inline `forecastbridge-github-deploy-lambda`: UpdateFunctionCode, GetFunction, GetFunctionConfiguration on the two functions only |
 | IAM role `forecastbridge-collector-role` | `AWSLambdaBasicExecutionRole` + inline `forecastbridge-collector-s3-write`: PutObject on `raw/*` only |
 | EventBridge Scheduler `forecastbridge-hourly` | `cron(5 * * * ? *)`, UTC, 3 retries, max event age 1 hour |
 | CloudWatch alarm `forecastbridge-collector-errors` | Collector `Errors` > 0 in an hour, emails via SNS topic `forecastbridge-alerts` |

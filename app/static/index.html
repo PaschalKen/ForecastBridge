@@ -4,16 +4,34 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ForecastBridge</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <!-- ?v=N gives the file a new address, so browsers can't reuse an old saved copy.
+       Bump the number for both files when you change either and older copies exist. -->
+  <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body>
   <main>
     <header>
       <h1>ForecastBridge</h1>
-      <label>
-        Location
-        <select id="location-select"></select>
-      </label>
+      <div class="controls">
+        <!-- Search any place: suggestions come from GET /places?query=... -->
+        <div class="search">
+          <label for="place-search" class="visually-hidden">Search any place</label>
+          <input id="place-search" type="search" placeholder="Search any place…" autocomplete="off"
+                 role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-results">
+          <ul id="place-results" class="place-results" role="listbox" hidden></ul>
+        </div>
+        <label>
+          Location
+          <select id="location-select"></select>
+        </label>
+        <label>
+          Units
+          <select id="units-select">
+            <option value="metric">°C, km/h</option>
+            <option value="imperial">°F, mph</option>
+          </select>
+        </label>
+      </div>
     </header>
 
     <!-- Shown while loading, or when something goes wrong -->
@@ -22,9 +40,19 @@
     <!-- "Right now" summary: filled in by app.js -->
     <h2 class="now-heading">Right now <span id="now-time"></span></h2>
     <section id="now" class="cards">
-      <div class="card"><span class="label">Temperature</span><span id="now-temp" class="value">–</span></div>
+      <div class="card">
+        <span class="label">Temperature</span><span id="now-temp" class="value">–</span>
+        <span id="now-feels" class="subtitle"></span>
+      </div>
       <div class="card"><span class="label">Chance of rain</span><span id="now-rain" class="value">–</span></div>
       <div class="card"><span class="label">Wind</span><span id="now-wind" class="value">–</span></div>
+      <div class="card"><span class="label">UV index</span><span id="now-uv" class="value">–</span></div>
+    </section>
+
+    <!-- Plain-language advice for the next 12 hours: filled in by app.js from GET /advice -->
+    <section class="advice-panel">
+      <h2 class="now-heading">Next 12 hours</h2>
+      <ul id="advice-list" class="advice-list"></ul>
     </section>
 
     <!-- 48-hour chart: drawn by Chart.js into this canvas -->
@@ -40,10 +68,23 @@
         </div>
       </div>
     </section>
+
+    <!-- How the forecast for one hour changed across the hourly snapshots: from GET /history -->
+    <section class="history-panel">
+      <div class="chart-toolbar">
+        <h2>How the forecast changed</h2>
+      </div>
+      <p id="history-summary" class="history-summary">Click any hour on the chart above to see how its forecast changed.</p>
+      <div class="chart-box">
+        <div class="history-inner">
+          <canvas id="history-chart"></canvas>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Chart.js from a CDN (pinned version), then our own script -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=4"></script>
 </body>
 </html>

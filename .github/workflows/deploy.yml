@@ -1,0 +1,91 @@
+# Deploys both Lambda functions whenever master changes (e.g. a pull request is merged).
+# Tests run first; if any fail, nothing is deployed. Can also be started by hand from the
+# Actions tab ("Run workflow").
+#
+# AWS access: the access key of the IAM user forecastbridge-github-deploy, stored as two
+# encrypted repository secrets (AWS_DEPLOY_ACCESS_KEY_ID, AWS_DEPLOY_SECRET_ACCESS_KEY).
+# That user can only upload code to the two functions. (Keyless OIDC login would be better, but
+# this account's Free plan blocks it; see RUNBOOK.md.)
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Least privilege by default; the deploy job adds only what it needs
+permissions:
+  contents: read
+
+# Never run two deploys at the same time; a newer one waits for the current one to finish
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-north-1
+  LIVE_URL: https://4hgo4skmrmq4avm52lrgj23lzu0gatfn.lambda-url.eu-north-1.on.aws
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the tests
+        run: pytest -v
+
+  deploy:
+    needs: test  # only runs if every test passed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 (same as the Lambda functions)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build both Lambda zips
+        run: bash scripts/build_lambda.sh
+
+      - name: Log in to AWS (deploy-only access key from repository secrets)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy the API (web page + /forecast, /advice, /places)
+        run: |
+          aws lambda update-function-code --function-name forecastbridge-api \
+            --zip-file fileb://build/api.zip --query '{Function:FunctionName,CodeSize:CodeSize}'
+          aws lambda wait function-updated --function-name forecastbridge-api
+
+      - name: Deploy the collector (hourly job)
+        run: |
+          aws lambda update-function-code --function-name forecastbridge-collector \
+            --zip-file fileb://build/collector.zip --query '{Function:FunctionName,CodeSize:CodeSize}'
+          aws lambda wait function-updated --function-name forecastbridge-collector
+
+      - name: Check the live site answers
+        run: |
+          # --fail turns an HTTP error (4xx/5xx) into a failed step; --retry covers a slow first start
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 "$LIVE_URL/health"
+          echo
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 -o /dev/null "$LIVE_URL/forecast?location=london"
+          echo "Live site is up"

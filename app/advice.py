@@ -1,0 +1,149 @@
+"""Plain-language advice from hourly forecasts, e.g. "Rain likely from 3pm (80%)".
+
+Every function here is pure: hourly records in, advice out. No internet, no AWS.
+The tests in tests/test_advice.py describe exactly what each function returns.
+"""
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
+from app.forecast import HourlyForecast
+
+HOURS_AHEAD = 12             # how far ahead the advice looks
+RAIN_LIKELY_PERCENT = 60     # at or above this: "Rain likely"
+RAIN_POSSIBLE_PERCENT = 30   # at or above this (but below likely): "Small chance of rain"
+UMBRELLA_PERCENT = RAIN_LIKELY_PERCENT  # any hour at or above this: "Take an umbrella"
+JACKET_BELOW_C = 10          # coldest hour below this: "Take a jacket"
+WINDY_KPH = 30               # strongest wind at or above this: "Windy"
+HIGH_UV_INDEX = 6            # strongest UV at or above this ("high" on the WHO scale): "wear sunscreen"
+
+# "metric" (°C, km/h) or "imperial" (°F, mph). The rules always work in metric; only the
+# numbers in the messages are converted.
+METRIC, IMPERIAL = "metric", "imperial"
+
+
+@dataclass(frozen=True)
+class Advice:
+    kind: str     # "rain", "rain-possible", "dry", "umbrella", "cold", "jacket", "wind" or "uv"
+    message: str  # the sentence shown to the user
+
+
+def format_hour(time: str) -> str:
+    """"2026-10-21T15:00" -> "3pm", "2026-10-21T09:00" -> "9am", "...T00:00" -> "12am"."""
+    hour = int(time[11:13])
+    suffix = "am" if hour < 12 else "pm"
+    return f"{hour % 12 or 12}{suffix}"  # 0 and 12 both show as 12
+
+
+def format_number(value: float) -> str:
+    """4.0 -> "4", 9.5 -> "9.5" (f"{value:g}" drops a trailing .0)."""
+    return f"{value:g}"
+
+
+def format_temperature(celsius: float, units: str = METRIC) -> str:
+    """12.4 -> "12.4°C", or in imperial "54.3°F"."""
+    if units == IMPERIAL:
+        return f"{format_number(round(celsius * 9 / 5 + 32, 1))}°F"
+    return f"{format_number(celsius)}°C"
+
+
+def format_speed(kph: float, units: str = METRIC) -> str:
+    """35.0 -> "35 km/h", or in imperial "21.7 mph"."""
+    if units == IMPERIAL:
+        return f"{format_number(round(kph / 1.609344, 1))} mph"
+    return f"{format_number(kph)} km/h"
+
+
+def rain_advice(hours: list[HourlyForecast]) -> Advice:
+    """Rain likely (the first wet hour), a small chance (the most likely hour), or dry."""
+    for hour in hours:
+        if hour.rain_chance_percent >= RAIN_LIKELY_PERCENT:
+            return Advice("rain", f"Rain likely from {format_hour(hour.time)} ({hour.rain_chance_percent}%)")
+
+    # max() returns the first hour if several share the highest chance
+    wettest = max(hours, key=lambda h: h.rain_chance_percent)
+    if wettest.rain_chance_percent >= RAIN_POSSIBLE_PERCENT:
+        return Advice(
+            "rain-possible",
+            f"Small chance of rain around {format_hour(wettest.time)} ({wettest.rain_chance_percent}%)",
+        )
+
+    return Advice("dry", f"Dry for the next {len(hours)} hours")
+
+
+def umbrella_advice(hours: list[HourlyForecast]) -> Advice | None:
+    """Advice("umbrella", "Take an umbrella") if any hour reaches UMBRELLA_PERCENT, otherwise None."""
+    if any(h.rain_chance_percent >= UMBRELLA_PERCENT for h in hours):
+        return Advice("umbrella", "Take an umbrella")
+    return None
+
+
+def temperature_advice(hours: list[HourlyForecast], units: str = METRIC) -> list[Advice]:
+    """The coldest hour, plus a jacket suggestion if it's below JACKET_BELOW_C."""
+    coldest = min(hours, key=lambda h: h.temperature_c)
+    advice = [Advice("cold", f"Coldest at {format_hour(coldest.time)}: {format_temperature(coldest.temperature_c, units)}")]
+
+    if coldest.temperature_c < JACKET_BELOW_C:
+        advice.append(Advice("jacket", "Take a jacket"))
+
+    return advice
+
+
+def wind_advice(hours: list[HourlyForecast], units: str = METRIC) -> Advice | None:
+    """The windiest hour if it reaches WINDY_KPH, otherwise None."""
+    windiest = max(hours, key=lambda h: h.wind_kph)
+    if windiest.wind_kph < WINDY_KPH:
+        return None
+
+    return Advice("wind", f"Windy around {format_hour(windiest.time)}, up to {format_speed(windiest.wind_kph, units)}")
+
+
+def uv_advice(hours: list[HourlyForecast]) -> Advice | None:
+    """The strongest UV hour if it reaches HIGH_UV_INDEX, otherwise None (also when the
+    snapshot is from before UV was saved)."""
+    known = [h for h in hours if h.uv_index is not None]
+    if not known:
+        return None
+
+    strongest = max(known, key=lambda h: h.uv_index)
+    if strongest.uv_index < HIGH_UV_INDEX:
+        return None
+
+    return Advice("uv", f"High UV around {format_hour(strongest.time)} (UV {format_number(strongest.uv_index)}): wear sunscreen")
+
+
+def build_advice(records: list[HourlyForecast], now_index: int, units: str = METRIC) -> list[Advice]:
+    """All the advice for the HOURS_AHEAD hours starting at records[now_index]:
+    rain, umbrella (if rain is likely), temperature, then wind (if windy). [] if no hours are left."""
+    hours = records[now_index:now_index + HOURS_AHEAD]
+    if not hours:
+        return []
+
+    advice = [rain_advice(hours)]
+
+    umbrella = umbrella_advice(hours)
+    if umbrella is not None:
+        advice.append(umbrella)
+
+    advice += temperature_advice(hours, units)
+
+    for extra in (wind_advice(hours, units), uv_advice(hours)):
+        if extra is not None:
+            advice.append(extra)
+
+    return advice
+
+
+def find_now_index(records: list[HourlyForecast], utc_offset_seconds: int, now: datetime | None = None) -> int:
+    """Index of the record for the current hour, or 0 if it isn't in the data.
+
+    The records' times are local to the forecast's timezone (UK time here), but the server's
+    clock is UTC. Open-Meteo sends the offset (3600 in summer, 0 in winter), so local time is
+    simply UTC + offset. No timezone library needed.
+    """
+    now = now or datetime.now(timezone.utc)
+    local_hour = (now + timedelta(seconds=utc_offset_seconds)).strftime("%Y-%m-%dT%H:00")
+
+    for index, record in enumerate(records):
+        if record.time == local_hour:
+            return index
+    return 0

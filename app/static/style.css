@@ -61,6 +61,25 @@ select {
 .now-heading { margin: 0 0 8px; font-size: 1rem; font-weight: 600; }
 .now-heading span { color: var(--muted); font-weight: 400; margin-left: 6px; }
 
+.advice-panel { margin-bottom: 16px; }
+
+.advice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.advice {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.95rem;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -117,3 +136,85 @@ button {
 
 button:hover:not(:disabled) { border-color: var(--muted); }
 button:disabled { opacity: 0.5; cursor: default; }
+
+/* --- Place search, next to the Location dropdown --- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Hidden on screen but still read by screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.search { position: relative; }
+
+.search input {
+  width: 220px;
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Suggestions drop down under the search box */
+.place-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+}
+
+.place-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+}
+
+.place-results button:hover,
+.place-results button:focus { background: var(--bg); outline: none; }
+
+.place-results-empty { padding: 6px 14px; color: var(--muted); }
+
+/* --- How the forecast changed: under the 48-hour chart, same look --- */
+
+.history-panel { margin-top: 24px; }
+
+.history-summary { margin: 0 0 8px; color: var(--muted); }
+
+/* Chart.js sizes the history chart to this element */
+.history-inner {
+  position: relative;
+  height: 260px;
+}
+
+/* The 48-hour chart's hours can be clicked to show their history */
+#forecast-chart { cursor: pointer; }
+
+/* Units dropdown: keep "km/h" lowercase (other dropdowns capitalise their text) */
+#units-select { text-transform: none; }
+
+/* "Feels like ..." under the temperature */
+.card .subtitle { color: var(--muted); font-size: 0.875rem; }

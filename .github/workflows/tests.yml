@@ -1,0 +1,31 @@
+# Runs the test suite on GitHub's servers for every push and pull request.
+# Results show as a tick or cross next to each commit, and on the README badge.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+# Least privilege: this workflow only needs to read the code
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 (same as the Lambda functions)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip  # reuse downloaded packages between runs, so later runs are faster
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the tests
+        run: pytest -v
